@@ -84,11 +84,24 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
         24
       );
 
-      console.log(`✅ Audio estratto e diviso in ${segmentResult.segments.length} segmenti`);
+      console.log(`\n✅ ===== ESTRAZIONE AUDIO COMPLETATA =====`);
+      console.log(`📦 Segmenti creati: ${segmentResult.segments.length}`);
+      console.log(`⏱️ Durata totale: ${(segmentResult.totalDuration / 60).toFixed(2)} minuti`);
+
+      // Log dettaglio ogni segmento
+      segmentResult.segments.forEach((seg, idx) => {
+        console.log(`\n🎵 Segmento ${idx + 1}:`);
+        console.log(`   📄 File: ${seg.filename}`);
+        console.log(`   💾 Dimensione: ${seg.sizeMB} MB`);
+        console.log(`   ⏱️ Durata: ${seg.duration.toFixed(2)}s (${seg.startTime.toFixed(2)}s - ${seg.endTime.toFixed(2)}s)`);
+      });
 
       // Salva ogni segmento come chunk
+      console.log(`\n💾 ===== SALVATAGGIO CHUNK =====`);
       for (let i = 0; i < segmentResult.segments.length; i++) {
         const segment = segmentResult.segments[i];
+        console.log(`\n📦 Salvando chunk ${i + 1}/${segmentResult.segments.length}...`);
+
         const chunkBuffer = await fs.readFile(segment.path);
 
         const chunkInfo = await chunkManager.saveChunk(
@@ -102,19 +115,25 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
           }
         );
 
+        console.log(`   ✅ Chunk salvato: ${chunkInfo.filename}`);
+        console.log(`   📊 Dimensione: ${(chunkInfo.size / 1024 / 1024).toFixed(2)} MB`);
         chunks.push(chunkInfo);
 
         // Pulisci file temporaneo del segmento
         await fs.unlink(segment.path).catch(() => {});
       }
 
+      const totalSize = segmentResult.segments.reduce((sum, s) => sum + s.size, 0);
       audioInfo = {
         duration: segmentResult.totalDuration,
         format: 'mp3',
-        size: segmentResult.segments.reduce((sum, s) => sum + s.size, 0)
+        size: totalSize
       };
 
-      console.log(`📊 Video processato: ${chunks.length} chunk creati`);
+      console.log(`\n✅ ===== VIDEO PROCESSATO =====`);
+      console.log(`📦 Chunk totali creati: ${chunks.length}`);
+      console.log(`💾 Dimensione totale audio: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`⏱️ Durata totale: ${(segmentResult.totalDuration / 60).toFixed(2)} minuti`);
 
     } else {
       // File audio normale
