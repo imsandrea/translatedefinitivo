@@ -1,0 +1,247 @@
+import React, { useState } from 'react';
+import { FileText, Headphones, Settings, Server, Cloud } from 'lucide-react';
+import { FileUpload } from './components/FileUpload';
+import { AudioPlayer } from './components/AudioPlayer';
+import { TranscriptionEditor } from './components/TranscriptionEditor';
+import { TranscriptionService } from './components/TranscriptionService';
+import { BackendTranscription } from './components/BackendTranscription';
+import { DeploymentGuide } from './components/DeploymentGuide';
+import { ProjectDownloader } from './components/ProjectDownloader';
+
+function App() {
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [isProcessingVideo, setIsProcessingVideo] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy' | 'download'>('services');
+
+  const handleVideoProcessing = (processing: boolean) => {
+    setIsProcessingVideo(processing);
+  };
+
+  const handleAudioExtracted = (audioFile: File) => {
+    console.log('Audio estratto:', audioFile.name);
+  };
+
+  const handleTranscriptionChange = (text: string) => {
+    setTranscription(text);
+  };
+
+  const handleTranscriptionResult = (newText: string) => {
+    if (newText && newText.trim()) {
+      // Sostituisci sempre il testo invece di aggiungerlo
+      setTranscription(newText);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">AudioScribe</h1>
+                <p className="text-sm text-gray-600">Trascrizione professionale di file audio</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="text-right text-sm text-gray-600">
+                {audioFile && (
+                  <>
+                    <div className="font-medium">
+                      {audioFile.name}
+                    </div>
+                    <div>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')} / {Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</div>
+                  </>
+                )}
+                {isProcessingVideo && (
+                  <div className="text-green-600 font-medium">
+                    Elaborando video...
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setActiveTab('download')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'download'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-tab="download"
+                >
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4" />
+                    <span>Download</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('backend')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'backend'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-tab="backend"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Server className="w-4 h-4" />
+                    <span>Backend Server</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('deploy')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'deploy'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-tab="deploy"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Cloud className="w-4 h-4" />
+                    <span>Deploy</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* File Upload */}
+        <FileUpload 
+          onFileSelect={setAudioFile}
+          selectedFile={audioFile}
+          onVideoProcessing={handleVideoProcessing}
+          onAudioExtracted={handleAudioExtracted}
+        />
+
+        {/* Main Content */}
+        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${isProcessingVideo ? 'opacity-50 pointer-events-none' : ''}`}>
+          {/* Audio Player */}
+          <div className="lg:col-span-1">
+            <AudioPlayer
+              audioFile={audioFile}
+              currentTime={currentTime}
+              onTimeUpdate={setCurrentTime}
+              onDurationChange={setDuration}
+            />
+          </div>
+
+          {/* Tabs and Content */}
+          <div className="lg:col-span-2">
+            {/* Tab Navigation */}
+            <div className="bg-white rounded-lg shadow-sm mb-4">
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-6">
+                  <button
+                    onClick={() => setActiveTab('transcribe')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'transcribe'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    data-tab="transcribe"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Editor Trascrizione</span>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setActiveTab('services')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'services'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    data-tab="services"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Headphones className="w-4 h-4" />
+                      <span>Servizi Trascrizione</span>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setActiveTab('download')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'download'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    data-tab="download"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Download Progetto</span>
+                    </div>
+                  </button>
+                </nav>
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="h-full">
+              {activeTab === 'transcribe' && (
+                <TranscriptionEditor
+                  transcription={transcription}
+                  onTranscriptionChange={handleTranscriptionChange}
+                  audioFile={audioFile}
+                />
+              )}
+              
+              {activeTab === 'services' && (
+                <TranscriptionService
+                  audioFile={audioFile}
+                  onTranscriptionResult={handleTranscriptionResult}
+                  currentTime={currentTime}
+                />
+              )}
+              
+              {activeTab === 'download' && (
+                <ProjectDownloader />
+              )}
+              
+              {activeTab === 'backend' && (
+                <BackendTranscription
+                  audioFile={audioFile}
+                  onTranscriptionResult={handleTranscriptionResult}
+                />
+              )}
+              
+              {activeTab === 'deploy' && (
+                <DeploymentGuide />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className="mt-12 text-center text-sm text-gray-500">
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p>
+              AudioScribe - Strumento professionale per la trascrizione di file audio e video
+            </p>
+            <p className="mt-1">
+              Audio: MP3, WAV, M4A, AAC, OGG, FLAC • Video: MP4, AVI, MOV, MKV, WEBM
+            </p>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;

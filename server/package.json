@@ -1,0 +1,41 @@
+{
+  "name": "audioscribe-backend",
+  "version": "1.0.0",
+  "description": "Backend Node.js per AudioScribe - elaborazione audio/video e trascrizione",
+  "author": "AudioScribe Team",
+  "license": "MIT",
+  "homepage": "https://github.com/your-username/audioscribe#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/audioscribe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/audioscribe/issues"
+  },
+  "keywords": [
+    "audio",
+    "video",
+    "transcription",
+    "whisper",
+    "ffmpeg",
+    "nodejs",
+    "express"
+  ],
+  "main": "server.js",
+  "type": "module",
+  "script se s": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^5.20.2",
+    "uuid": "^9.0.1"
+  }
+}
