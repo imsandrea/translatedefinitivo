@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Download, Copy, RotateCcw, Sparkles } from 'lucide-react';
+import { Save, Download, Copy, RotateCcw, Sparkles, Languages } from 'lucide-react';
 import { TextFormattingPanel } from './TextFormattingPanel';
 import { textFormatter } from '../services/textFormatter';
+import { translationService } from '../services/translationService';
 
 interface TranscriptionEditorProps {
   transcription: string;
@@ -19,12 +20,17 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showFormattingPanel, setShowFormattingPanel] = useState(false);
+  const [showTranslateModal, setShowTranslateModal] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState('en');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
 
-  // Inizializza il formatter con l'API key esistente
+  // Inizializza il formatter e il traduttore con l'API key esistente
   useEffect(() => {
     const apiKey = localStorage.getItem('openai_api_key');
     if (apiKey) {
       textFormatter.setApiKey(apiKey);
+      translationService.setApiKey(apiKey);
     }
   }, []);
 
@@ -159,6 +165,38 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
     setLastSaved(new Date());
   };
 
+  const handleTranslate = async () => {
+    if (!localTranscription.trim()) {
+      setTranslationError('Nessun testo da tradurre');
+      return;
+    }
+
+    if (!translationService.isConfigured()) {
+      setTranslationError('API Key OpenAI non configurata');
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationError(null);
+
+    try {
+      const translatedText = await translationService.translateText(localTranscription, {
+        targetLanguage,
+        sourceLanguage: 'auto'
+      });
+
+      setLocalTranscription(translatedText);
+      onTranscriptionChange(translatedText);
+      setLastSaved(new Date());
+      setShowTranslateModal(false);
+    } catch (error) {
+      console.error('Errore traduzione:', error);
+      setTranslationError(error instanceof Error ? error.message : 'Errore durante la traduzione');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 h-full flex flex-col">
       {/* Header */}
@@ -193,6 +231,16 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
           >
             <Sparkles className="w-4 h-4" />
             <span>AI</span>
+          </button>
+
+          <button
+            onClick={() => setShowTranslateModal(true)}
+            disabled={!localTranscription.trim() || !translationService.isConfigured()}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1"
+            title="Traduci testo"
+          >
+            <Languages className="w-4 h-4" />
+            <span>Traduci</span>
           </button>
           
           <button
@@ -251,6 +299,82 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
         isVisible={showFormattingPanel}
         onClose={() => setShowFormattingPanel(false)}
       />
+
+      {/* Translation Modal */}
+      {showTranslateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+              <Languages className="w-5 h-5 mr-2 text-blue-600" />
+              Traduci Trascrizione
+            </h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lingua di destinazione
+              </label>
+              <select
+                value={targetLanguage}
+                onChange={(e) => setTargetLanguage(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isTranslating}
+              >
+                <option value="en">Inglese</option>
+                <option value="it">Italiano</option>
+                <option value="es">Spagnolo</option>
+                <option value="fr">Francese</option>
+                <option value="de">Tedesco</option>
+                <option value="pt">Portoghese</option>
+                <option value="ru">Russo</option>
+                <option value="zh">Cinese</option>
+                <option value="ja">Giapponese</option>
+                <option value="ko">Coreano</option>
+                <option value="ar">Arabo</option>
+                <option value="hi">Hindi</option>
+                <option value="nl">Olandese</option>
+                <option value="pl">Polacco</option>
+                <option value="tr">Turco</option>
+              </select>
+            </div>
+
+            {translationError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {translationError}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowTranslateModal(false);
+                  setTranslationError(null);
+                }}
+                disabled={isTranslating}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors flex items-center space-x-2"
+              >
+                {isTranslating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Traduzione...</span>
+                  </>
+                ) : (
+                  <>
+                    <Languages className="w-4 h-4" />
+                    <span>Traduci</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Editor */}
       <div className="flex-1">
