@@ -1,6 +1,6 @@
 {
   "name": "audioscribe-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Backend Node.js per AudioScribe - elaborazione audio/video e trascrizione",
   "author": "AudioScribe Team",
   "license": "MIT",
