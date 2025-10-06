@@ -145,6 +145,9 @@ log_success "Frontend buildato con successo"
 # Configurazione Nginx
 log_info "Configurazione Nginx..."
 
+# Rimuovi eventuali configurazioni brotli non supportate
+sudo rm -f /etc/nginx/conf.d/brotli.conf /etc/nginx/modules-enabled/*brotli* 2>/dev/null || true
+
 # Backup configurazione esistente
 sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup 2>/dev/null || true
 
