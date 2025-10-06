@@ -54,9 +54,17 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
     let audioFilePath = tempFilePath;
     let isVideo = false;
 
+    // 3. Crea sessione per chunking
+    sessionId = chunkManager.createSession(req.file.originalname);
+    console.log(`\n📦 ===== CREAZIONE CHUNK =====`);
+    console.log(`🆔 Session ID: ${sessionId}`);
+
+    let chunks = [];
+    let audioInfo;
+
     if (videoProcessor.isVideoFile(req.file.originalname)) {
       isVideo = true;
-      console.log(`\n🎬 ===== ESTRAZIONE AUDIO DA VIDEO =====`);
+      console.log(`\n🎬 ===== ESTRAZIONE AUDIO DA VIDEO CON CHUNKING =====`);
 
       const videoInfo = await videoProcessor.getVideoInfo(tempFilePath);
       console.log(`📹 Info video:`, {
@@ -69,73 +77,18 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
         throw new Error('Il video non contiene traccia audio');
       }
 
-      // Estrai audio dal video
-      const audioResult = await videoProcessor.extractAudio(tempFilePath, {
-        format: 'mp3',
-        quality: '128k',
-        channels: 1,
-        sampleRate: 16000
-      });
-
-      audioFilePath = audioResult.audioPath;
-      console.log(`✅ Audio estratto: ${audioFilePath}`);
-      console.log(`📊 Dimensione audio: ${(audioResult.size / 1024 / 1024).toFixed(2)}MB`);
-    }
-
-    // 3. Crea sessione per chunking
-    sessionId = chunkManager.createSession(req.file.originalname);
-    console.log(`\n📦 ===== CREAZIONE CHUNK =====`);
-    console.log(`🆔 Session ID: ${sessionId}`);
-
-    // 4. Analizza audio
-    const audioInfo = await audioProcessor.getAudioInfo(audioFilePath);
-    console.log(`🎵 Info audio:`, {
-      duration: audioInfo.duration,
-      size: audioInfo.size,
-      format: audioInfo.format
-    });
-
-    // 5. Determina se serve chunking
-    const audioStats = await fs.stat(audioFilePath);
-    const fileSizeMB = audioStats.size / (1024 * 1024);
-    const needsChunking = fileSizeMB > 24; // Limite Whisper
-
-    let chunks = [];
-
-    if (!needsChunking) {
-      console.log(`✅ File piccolo - Nessun chunking necessario`);
-
-      // Salva come chunk singolo
-      const audioBuffer = await fs.readFile(audioFilePath);
-      const chunkInfo = await chunkManager.saveChunk(
-        sessionId,
-        0,
-        audioBuffer,
-        {
-          startTime: 0,
-          endTime: audioInfo.duration,
-          duration: audioInfo.duration,
-          originalSize: audioStats.size
-        }
-      );
-
-      chunks = [chunkInfo];
-
-    } else {
-      console.log(`✂️ File grande rilevato - Creazione chunk...`);
-
-      // Crea chunk multipli
-      const splitResult = await audioProcessor.splitAudio(
-        audioFilePath,
+      // Usa extractAudioWithSegmentation che estrae e chunk in un colpo solo
+      const segmentResult = await videoProcessor.extractAudioWithSegmentation(
+        tempFilePath,
         chunkDurationMinutes,
         24
       );
 
-      console.log(`📊 Chunk creati: ${splitResult.segments.length}`);
+      console.log(`✅ Audio estratto e diviso in ${segmentResult.segments.length} segmenti`);
 
-      // Salva ogni chunk
-      for (let i = 0; i < splitResult.segments.length; i++) {
-        const segment = splitResult.segments[i];
+      // Salva ogni segmento come chunk
+      for (let i = 0; i < segmentResult.segments.length; i++) {
+        const segment = segmentResult.segments[i];
         const chunkBuffer = await fs.readFile(segment.path);
 
         const chunkInfo = await chunkManager.saveChunk(
@@ -151,12 +104,86 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
 
         chunks.push(chunkInfo);
 
-        // Pulisci file temporaneo del chunk
+        // Pulisci file temporaneo del segmento
         await fs.unlink(segment.path).catch(() => {});
       }
 
-      // Pulisci sessione audioProcessor
-      await audioProcessor.cleanup(splitResult.sessionId);
+      audioInfo = {
+        duration: segmentResult.totalDuration,
+        format: 'mp3',
+        size: segmentResult.segments.reduce((sum, s) => sum + s.size, 0)
+      };
+
+      console.log(`📊 Video processato: ${chunks.length} chunk creati`);
+
+    } else {
+      // File audio normale
+      console.log(`\n🎵 ===== ELABORAZIONE AUDIO =====`);
+
+      audioFilePath = tempFilePath;
+      audioInfo = await audioProcessor.getAudioInfo(audioFilePath);
+      console.log(`🎵 Info audio:`, {
+        duration: audioInfo.duration,
+        size: audioInfo.size,
+        format: audioInfo.format
+      });
+
+      // Determina se serve chunking
+      const audioStats = await fs.stat(audioFilePath);
+      const fileSizeMB = audioStats.size / (1024 * 1024);
+      const needsChunking = fileSizeMB > 24;
+
+      if (!needsChunking) {
+        console.log(`✅ File piccolo - Nessun chunking necessario`);
+
+        const audioBuffer = await fs.readFile(audioFilePath);
+        const chunkInfo = await chunkManager.saveChunk(
+          sessionId,
+          0,
+          audioBuffer,
+          {
+            startTime: 0,
+            endTime: audioInfo.duration,
+            duration: audioInfo.duration,
+            originalSize: audioStats.size
+          }
+        );
+
+        chunks = [chunkInfo];
+
+      } else {
+        console.log(`✂️ File grande rilevato - Creazione chunk...`);
+
+        const splitResult = await audioProcessor.splitAudio(
+          audioFilePath,
+          chunkDurationMinutes,
+          24
+        );
+
+        console.log(`📊 Chunk creati: ${splitResult.segments.length}`);
+
+        for (let i = 0; i < splitResult.segments.length; i++) {
+          const segment = splitResult.segments[i];
+          const chunkBuffer = await fs.readFile(segment.path);
+
+          const chunkInfo = await chunkManager.saveChunk(
+            sessionId,
+            i,
+            chunkBuffer,
+            {
+              startTime: segment.startTime,
+              endTime: segment.endTime,
+              duration: segment.duration
+            }
+          );
+
+          chunks.push(chunkInfo);
+
+          await fs.unlink(segment.path).catch(() => {});
+        }
+
+        await audioProcessor.cleanup(splitResult.sessionId);
+      }
     }
 
     // 6. Pulisci file temporanei upload
@@ -165,11 +192,6 @@ router.post('/process-file', upload.single('file'), async (req, res) => {
     if (tempFilePath) {
       await fs.unlink(tempFilePath).catch(() => {});
       console.log(`🗑️ File originale eliminato`);
-    }
-
-    if (isVideo && audioFilePath !== tempFilePath) {
-      await fs.unlink(audioFilePath).catch(() => {});
-      console.log(`🗑️ Audio estratto eliminato`);
     }
 
     console.log(`\n✅ ===== ELABORAZIONE COMPLETATA =====`);
