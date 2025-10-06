@@ -140,7 +140,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
     );
   }
 
-  const isVideo = audioFile ? videoProcessor.isVideoFile(audioFile) : false;
+  const isVideo = audioFile ? audioFile.type.startsWith('video/') : false;
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
