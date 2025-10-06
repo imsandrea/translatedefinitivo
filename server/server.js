@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import transcriptionRoutes from './routes/transcription.js';
 import chunkedTranscriptionRoutes from './routes/chunkedTranscription.js';
+import smartTranscriptionRoutes from './routes/smartTranscription.js';
 
 // Configurazione ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +34,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes
 app.use('/api/transcription', transcriptionRoutes);
 app.use('/api/chunked', chunkedTranscriptionRoutes);
+app.use('/api/smart', smartTranscriptionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

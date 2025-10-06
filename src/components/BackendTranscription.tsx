@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music } from 'lucide-react';
-import { backendService, AudioAnalysis, VideoAnalysis, TranscriptionResult } from '../services/backendService';
+import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music, Rocket } from 'lucide-react';
+import { smartTranscriptionService, SmartTranscriptionProgress } from '../services/smartTranscriptionService';
 import { videoProcessor } from '../services/videoProcessor';
 
 interface BackendTranscriptionProps {
@@ -12,87 +12,64 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   audioFile,
   onTranscriptionResult
 }) => {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [analysis, setAnalysis] = useState<AudioAnalysis | VideoAnalysis | null>(null);
-  const [isVideoFile, setIsVideoFile] = useState(false);
-  const [progress, setProgress] = useState({ percentage: 0, message: '' });
+  const [progress, setProgress] = useState<SmartTranscriptionProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<boolean | null>(null);
+  const [language, setLanguage] = useState('it');
 
-  // Verifica stato server
   React.useEffect(() => {
     checkServerStatus();
   }, []);
 
   const checkServerStatus = async () => {
-    const isOnline = await backendService.healthCheck();
+    const isOnline = await smartTranscriptionService.checkServerHealth();
     setServerStatus(isOnline);
   };
 
-  const analyzeFile = async () => {
+  const startSmartTranscription = async () => {
     if (!audioFile) return;
-
-    setIsAnalyzing(true);
-    setError(null);
-    
-    const isVideo = videoProcessor.isVideoFile(audioFile);
-    setIsVideoFile(isVideo);
-
-    try {
-      const result = isVideo 
-        ? await backendService.analyzeVideo(audioFile)
-        : await backendService.analyzeAudio(audioFile);
-      setAnalysis(result);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const startTranscription = async () => {
-    if (!analysis) return;
 
     setIsTranscribing(true);
     setError(null);
-    setProgress({ percentage: 0, message: 'Inizializzazione...' });
+    setProgress({
+      phase: 'uploading',
+      percentage: 0,
+      message: 'Preparazione...'
+    });
 
     try {
-      const options = {
-        language: 'it',
-        response_format: 'verbose_json',
-        temperature: 0
-      };
+      console.log('🚀 [FRONTEND] Invio file al server per trascrizione smart...');
 
-      const result = isVideoFile
-        ? await backendService.transcribeVideo(
-            analysis.fileId,
-            options,
-            (progressUpdate) => {
-              setProgress(progressUpdate);
-            }
-          )
-        : await backendService.transcribeAudio(
-            analysis.fileId,
-            options,
-            (progressUpdate) => {
-              setProgress(progressUpdate);
-            }
-          );
+      const result = await smartTranscriptionService.transcribeFile(
+        audioFile,
+        {
+          language,
+          chunkDurationMinutes: 10,
+          temperature: 0
+        },
+        (progressUpdate) => {
+          setProgress(progressUpdate);
+          console.log(`📊 [FRONTEND] Progresso: ${progressUpdate.message} (${progressUpdate.percentage}%)`);
+        }
+      );
 
-      onTranscriptionResult(result.transcription.fullText);
+      console.log('✅ [FRONTEND] Trascrizione completata:', result);
 
-      // Pulizia file dal server dopo trascrizione
-      setTimeout(() => {
-        backendService.cleanupFile(analysis.fileId).catch(console.error);
-      }, 5000);
+      onTranscriptionResult(result.transcription);
+
+      setProgress({
+        phase: 'completed',
+        percentage: 100,
+        message: 'Completato!'
+      });
 
     } catch (err: any) {
+      console.error('❌ [FRONTEND] Errore trascrizione:', err);
       setError(err.message);
     } finally {
       setIsTranscribing(false);
-      setProgress({ percentage: 0, message: '' });
+      setTimeout(() => setProgress(null), 3000);
     }
   };
 
@@ -162,13 +139,18 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
     );
   }
 
+  const isVideo = audioFile ? videoProcessor.isVideoFile(audioFile) : false;
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-800">Trascrizione Backend</h3>
+          <h3 className="text-lg font-semibold text-gray-800">
+            <Rocket className="w-6 h-6 inline-block mr-2 text-blue-600" />
+            Trascrizione Smart Server
+          </h3>
           <p className="text-sm text-gray-600">
-            Elaborazione server con supporto file grandi e video
+            Elaborazione automatica: video → audio → chunk → whisper
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -177,157 +159,77 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
         </div>
       </div>
 
-      {/* File Analysis */}
-      {!analysis && audioFile && (
-        <div className="mb-6">
-          <button
-            onClick={analyzeFile}
-            disabled={isAnalyzing}
-            className={`w-full ${
-              videoProcessor.isVideoFile(audioFile) 
-                ? 'bg-green-600 hover:bg-green-700' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            } disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2`}
-          >
-            {videoProcessor.isVideoFile(audioFile) ? (
-              <Video className="w-5 h-5" />
+      {audioFile && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            {isVideo ? (
+              <Video className="w-8 h-8 text-green-600" />
             ) : (
-              <Upload className="w-5 h-5" />
+              <Music className="w-8 h-8 text-blue-600" />
             )}
-            <span>
-              {isAnalyzing 
-                ? 'Analizzando file...' 
-                : videoProcessor.isVideoFile(audioFile)
-                  ? 'Analizza File Video'
-                  : 'Analizza File Audio'
-              }
-            </span>
-          </button>
+            <div className="flex-1">
+              <p className="font-medium text-gray-800">{audioFile.name}</p>
+              <p className="text-sm text-gray-600">
+                {(audioFile.size / 1024 / 1024).toFixed(2)} MB • {isVideo ? 'Video' : 'Audio'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Analysis Results */}
-      {analysis && (
-        <div className="mb-6 space-y-4">
-          <div className={`${
-            isVideoFile ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'
-          } border rounded-lg p-4`}>
-            <div className="flex items-center space-x-2 mb-3">
-              <CheckCircle className={`w-5 h-5 ${isVideoFile ? 'text-green-600' : 'text-blue-600'}`} />
-              <h4 className={`font-medium ${isVideoFile ? 'text-green-800' : 'text-blue-800'}`}>
-                Analisi {isVideoFile ? 'Video' : 'Audio'} Completata
-              </h4>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">File:</span>
-                <p className="font-medium">{analysis.originalName}</p>
-              </div>
-              <div>
-                <span className="text-gray-600">Dimensione:</span>
-                <p className="font-medium">{analysis.fileSizeMB} MB</p>
-              </div>
-              <div>
-                <span className="text-gray-600">Durata:</span>
-                <p className="font-medium">
-                  {Math.floor((isVideoFile ? (analysis as VideoAnalysis).videoInfo.duration : (analysis as AudioAnalysis).audioInfo.duration) / 60)}:
-                  {Math.floor((isVideoFile ? (analysis as VideoAnalysis).videoInfo.duration : (analysis as AudioAnalysis).audioInfo.duration) % 60).toString().padStart(2, '0')}
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-600">Formato:</span>
-                <p className="font-medium">
-                  {isVideoFile ? (analysis as VideoAnalysis).videoInfo.format : (analysis as AudioAnalysis).audioInfo.format}
-                </p>
-              </div>
-              {isVideoFile && (
-                <>
-                  <div>
-                    <span className="text-gray-600">Risoluzione:</span>
-                    <p className="font-medium">
-                      {(analysis as VideoAnalysis).videoInfo.width}x{(analysis as VideoAnalysis).videoInfo.height}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Audio stimato:</span>
-                    <p className="font-medium">{(analysis as VideoAnalysis).estimatedAudioSizeMB} MB</p>
-                  </div>
-                </>
-              )}
-            </div>
+      {/* Language Selection */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Lingua Audio
+        </label>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇺🇸 Inglese</option>
+          <option value="es">🇪🇸 Spagnolo</option>
+          <option value="fr">🇫🇷 Francese</option>
+          <option value="de">🇩🇪 Tedesco</option>
+        </select>
+      </div>
 
-            {(isVideoFile ? (analysis as VideoAnalysis).needsSegmentation : (analysis as AudioAnalysis).needsSplitting) && (
-              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                <div className="flex items-center space-x-2">
-                  <HardDrive className="w-4 h-4 text-yellow-600" />
-                  <span className="text-sm font-medium text-yellow-800">
-                    {isVideoFile ? 'Video grande' : 'File grande'} - sarà diviso in {analysis.estimatedSegments} segmenti
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {isVideoFile && !(analysis as VideoAnalysis).videoInfo.hasAudio && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 text-red-600" />
-                  <span className="text-sm font-medium text-red-800">
-                    ⚠️ Il video non contiene traccia audio
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center space-x-1">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">
-                  Costo stimato: ~${analysis.estimatedCost}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Transcription Button */}
-          <button
-            onClick={startTranscription}
-            disabled={isTranscribing || (isVideoFile && !(analysis as VideoAnalysis).videoInfo.hasAudio)}
-            className={`w-full ${
-              isVideoFile ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-            } disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2`}
-          >
-            {isVideoFile ? (
-              <div className="flex items-center space-x-2">
-                <Video className="w-5 h-5" />
-                <Music className="w-4 h-4" />
-              </div>
-            ) : (
-              <Zap className="w-5 h-5" />
-            )}
-            <span>
-              {isTranscribing 
-                ? (isVideoFile ? 'Elaborazione video in corso...' : 'Trascrizione in corso...') 
-                : (isVideoFile ? 'Estrai Audio e Trascrivi' : 'Avvia Trascrizione Completa')
-              }
-            </span>
-          </button>
-        </div>
+      {/* Smart Transcription Button */}
+      {audioFile && (
+        <button
+          onClick={startSmartTranscription}
+          disabled={isTranscribing}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
+        >
+          <Rocket className="w-6 h-6" />
+          <span className="text-lg">
+            {isTranscribing
+              ? 'Elaborazione in corso sul server...'
+              : 'Avvia Trascrizione Smart Server'
+            }
+          </span>
+        </button>
       )}
 
       {/* Progress Bar */}
-      {isTranscribing && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-            <span>{progress.message}</span>
-            <span>{progress.percentage}%</span>
+      {progress && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
+            <span className="font-medium">{progress.message}</span>
+            <span className="font-bold text-blue-600">{progress.percentage}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-green-600 h-2 rounded-full transition-all duration-300"
+          <div className="w-full bg-blue-200 rounded-full h-3">
+            <div
+              className="bg-gradient-to-r from-blue-600 to-purple-600 h-3 rounded-full transition-all duration-300"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
+          {progress.currentSegment && progress.totalSegments && (
+            <div className="mt-2 text-xs text-gray-600">
+              Segmento {progress.currentSegment} di {progress.totalSegments}
+            </div>
+          )}
         </div>
       )}
 
@@ -342,12 +244,19 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       )}
 
       {/* Info */}
-      <div className="text-xs text-gray-500 space-y-1">
-        <p>• Supporta file audio e video fino a 100MB</p>
-        <p>• Estrazione automatica audio da video con FFmpeg</p>
-        <p>• File grandi vengono automaticamente divisi in segmenti</p>
-        <p>• Elaborazione server con FFmpeg per ottimizzazione audio</p>
-        <p>• Pulizia automatica file temporanei</p>
+      <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+          <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+          Vantaggi Trascrizione Smart Server
+        </h4>
+        <div className="text-sm text-gray-700 space-y-1.5">
+          <p>✅ <strong>Zero carico sul browser</strong> - tutto il lavoro pesante sul server</p>
+          <p>✅ <strong>Video supportati</strong> - estrazione automatica audio con FFmpeg</p>
+          <p>✅ <strong>File grandi OK</strong> - chunking automatico lato server</p>
+          <p>✅ <strong>Molto più veloce</strong> - FFmpeg nativo vs browser</p>
+          <p>✅ <strong>Pulizia automatica</strong> - file temporanei eliminati dopo trascrizione</p>
+          <p>✅ <strong>Limite: 500MB</strong> - audio o video</p>
+        </div>
       </div>
     </div>
   );
