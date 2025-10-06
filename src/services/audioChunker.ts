@@ -240,16 +240,18 @@ class AudioChunker {
         });
         // Crea nuovo AudioBuffer per questo chunk
         const chunkBuffer = audioContext.createBuffer(channels, chunkLength, sampleRate);
-        
+
         // Copia i dati audio per ogni canale
         for (let channel = 0; channel < channels; channel++) {
           const originalData = audioBuffer.getChannelData(channel);
           const chunkData = chunkBuffer.getChannelData(channel);
-          
-          for (let sample = 0; sample < chunkLength; sample++) {
-            chunkData[sample] = originalData[startSample + sample];
-          }
+
+          // Usa copyWithin per copiare grandi blocchi invece di loop sample per sample
+          chunkData.set(originalData.subarray(startSample, endSample));
         }
+
+        // Lascia respirare il browser ogni chunk
+        await new Promise(resolve => setTimeout(resolve, 0));
 
         console.log(`🔄 Convertendo chunk ${i + 1} in WAV...`);
         // Converti AudioBuffer in WAV Blob

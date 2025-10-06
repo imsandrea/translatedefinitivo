@@ -750,31 +750,38 @@ export const WhisperTranscription: React.FC<WhisperTranscriptionProps> = ({
 
         {/* Step 2: Create Chunks (if needed) */}
         {audioAnalysis && audioAnalysis.needsChunking && chunks.length === 0 && (
-          <button
-            onClick={async () => {
-              if (!audioFile) return;
-              setError(null);
-              addLog('Iniziando creazione chunk...', 'info');
-              
-              try {
-                const audioChunks = await audioChunker.chunkAudioFile(
-                  audioFile, 
-                  10,
-                  setChunkingProgress
-                );
-                setChunks(audioChunks);
-                addLog(`${audioChunks.length} chunk creati con successo`, 'success');
-              } catch (err: any) {
-                addLog(`Errore creazione chunk: ${err.message}`, 'error');
-                setError(err.message);
-              }
-            }}
-            disabled={chunkingProgress !== null}
-            className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
-          >
-            <Scissors className="w-5 h-5" />
-            <span>✂️ Crea Chunk Audio ({audioAnalysis.estimatedChunks} parti)</span>
-          </button>
+          <div className="space-y-2">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
+              <p className="font-semibold">⚠️ Attenzione: Processo Intensivo</p>
+              <p className="text-xs mt-1">Il browser potrebbe rallentare durante la creazione dei chunk. Questo è normale per file grandi.</p>
+            </div>
+            <button
+              onClick={async () => {
+                if (!audioFile) return;
+                setError(null);
+                addLog('Iniziando creazione chunk...', 'info');
+                addLog('Il browser potrebbe rallentare temporaneamente, è normale.', 'warning');
+
+                try {
+                  const audioChunks = await audioChunker.chunkAudioFile(
+                    audioFile,
+                    10,
+                    setChunkingProgress
+                  );
+                  setChunks(audioChunks);
+                  addLog(`${audioChunks.length} chunk creati con successo`, 'success');
+                } catch (err: any) {
+                  addLog(`Errore creazione chunk: ${err.message}`, 'error');
+                  setError(err.message);
+                }
+              }}
+              disabled={chunkingProgress !== null}
+              className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+            >
+              <Scissors className="w-5 h-5" />
+              <span>✂️ Crea Chunk Audio ({audioAnalysis.estimatedChunks} parti)</span>
+            </button>
+          </div>
         )}
 
         {/* Step 3: Transcribe */}
