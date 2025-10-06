@@ -24,6 +24,15 @@ function App() {
     console.log('Audio estratto:', audioFile.name);
   };
 
+  const handleFileChange = (file: File | null) => {
+    // Azzera tutto quando cambia il file
+    setAudioFile(file);
+    setTranscription('');
+    setCurrentTime(0);
+    setDuration(0);
+    setActiveTab('services');
+  };
+
   const handleTranscriptionChange = (text: string) => {
     setTranscription(text);
   };
@@ -122,8 +131,8 @@ function App() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* File Upload */}
-        <FileUpload 
-          onFileSelect={setAudioFile}
+        <FileUpload
+          onFileSelect={handleFileChange}
           selectedFile={audioFile}
           onVideoProcessing={handleVideoProcessing}
           onAudioExtracted={handleAudioExtracted}
