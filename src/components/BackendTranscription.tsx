@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music, Rocket } from 'lucide-react';
-import { smartTranscriptionService, SmartTranscriptionProgress } from '../services/smartTranscriptionService';
-import { videoProcessor } from '../services/videoProcessor';
+import { serverProcessingService, ProcessingProgress } from '../services/serverProcessingService';
 
 interface BackendTranscriptionProps {
   audioFile: File | null;
@@ -13,7 +12,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   onTranscriptionResult
 }) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [progress, setProgress] = useState<SmartTranscriptionProgress | null>(null);
+  const [progress, setProgress] = useState<ProcessingProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<boolean | null>(null);
   const [language, setLanguage] = useState('it');
@@ -23,7 +22,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   }, []);
 
   const checkServerStatus = async () => {
-    const isOnline = await smartTranscriptionService.checkServerHealth();
+    const isOnline = await serverProcessingService.checkHealth();
     setServerStatus(isOnline);
   };
 
@@ -39,33 +38,35 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
     });
 
     try {
-      console.log('🚀 [FRONTEND] Invio file al server per trascrizione smart...');
+      console.log('🚀 Invio file al server per elaborazione completa...');
 
-      const result = await smartTranscriptionService.transcribeFile(
+      const result = await serverProcessingService.processFile(
         audioFile,
         {
+          transcribeNow: true,
           language,
-          chunkDurationMinutes: 10,
-          temperature: 0
+          chunkDurationMinutes: 10
         },
         (progressUpdate) => {
           setProgress(progressUpdate);
-          console.log(`📊 [FRONTEND] Progresso: ${progressUpdate.message} (${progressUpdate.percentage}%)`);
+          console.log(`📊 Progresso: ${progressUpdate.message} (${progressUpdate.percentage}%)`);
         }
       );
 
-      console.log('✅ [FRONTEND] Trascrizione completata:', result);
+      console.log('✅ Elaborazione completata:', result);
 
-      onTranscriptionResult(result.transcription);
+      if (result.transcription) {
+        onTranscriptionResult(result.transcription.fullText);
+      }
 
       setProgress({
-        phase: 'completed',
+        phase: 'complete',
         percentage: 100,
         message: 'Completato!'
       });
 
     } catch (err: any) {
-      console.error('❌ [FRONTEND] Errore trascrizione:', err);
+      console.error('❌ Errore elaborazione:', err);
       setError(err.message);
     } finally {
       setIsTranscribing(false);
@@ -87,14 +88,14 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           </p>
           
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-left">
-            <h4 className="font-medium text-red-800 mb-2">Per avviare il backend:</h4>
+            <h4 className="font-medium text-red-800 mb-2">Per avviare il server backend:</h4>
             <ol className="text-sm text-red-700 space-y-1">
               <li className="flex items-start space-x-2">
                 <span className="font-bold text-red-800">1.</span>
                 <div>
-                  <p className="font-medium">Installa FFmpeg (OBBLIGATORIO):</p>
+                  <p className="font-medium">Installa FFmpeg (necessario per video):</p>
                   <div className="mt-1 space-y-1">
-                    <p><strong>Windows:</strong> Scarica da ffmpeg.org e aggiungi al PATH</p>
+                    <p><strong>Windows:</strong> Scarica da ffmpeg.org</p>
                     <p><strong>macOS:</strong> <code className="bg-red-100 px-1 rounded">brew install ffmpeg</code></p>
                     <p><strong>Linux:</strong> <code className="bg-red-100 px-1 rounded">sudo apt install ffmpeg</code></p>
                   </div>
