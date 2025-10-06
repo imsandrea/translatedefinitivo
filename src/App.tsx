@@ -46,8 +46,11 @@ function App() {
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">AudioScribe</h1>
-                <p className="text-sm text-gray-600">Trascrizione professionale di file audio</p>
+                <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  AudioScribe
+                  <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">v1.1.0</span>
+                </h1>
+                <p className="text-sm text-gray-600">Trascrizione e traduzione professionale</p>
               </div>
             </div>
             
