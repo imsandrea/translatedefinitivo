@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, apikey",
 };
 
-const CHUNK_SIZE = 24 * 1024 * 1024;
+const CHUNK_SIZE = 10 * 1024 * 1024;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
