@@ -32,7 +32,11 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       return;
     }
 
-    console.log(`📊 File: ${audioFile.name}, Dimensione: ${(audioFile.size / 1024 / 1024).toFixed(2)} MB`);
+    const fileSizeMB = (audioFile.size / 1024 / 1024).toFixed(2);
+    console.log(`\n🎬 ========== INIZIO TRASCRIZIONE ==========`);
+    console.log(`📊 File: ${audioFile.name}`);
+    console.log(`📦 Dimensione: ${fileSizeMB} MB`);
+    console.log(`🌍 Lingua: ${language}`);
 
     setIsTranscribing(true);
     setError(null);
@@ -42,13 +46,14 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       const smallFileLimit = 25 * 1024 * 1024;
 
       if (audioFile.size <= smallFileLimit) {
-        console.log('🚀 File piccolo - trascrizione diretta...');
+        console.log(`\n✅ File piccolo (≤25MB) - Trascrizione diretta`);
         setProgress(10);
 
         const result = await edgeFunctionService.transcribeAudio(audioFile, {
           language,
         });
 
+        console.log(`✅ Trascrizione completata!`);
         setProgress(90);
 
         if (result.success && result.text) {
@@ -56,37 +61,60 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
         }
 
         setProgress(100);
+        setTimeout(() => {
+          setIsTranscribing(false);
+          setProgress(0);
+        }, 2000);
+
       } else {
-        console.log('🚀 File grande - upload e chunking lato server...');
+        console.log(`\n⚡ File grande (>25MB) - Chunking lato server`);
+        console.log(`📤 FASE 1/3: Upload file su Supabase Storage...`);
         setProgress(10);
 
         const uploadResult = await edgeFunctionService.uploadForChunking(audioFile, language);
-        console.log(`✅ Upload completato. Job ID: ${uploadResult.jobId}, Chunk: ${uploadResult.totalChunks}`);
+        console.log(`✅ Upload completato!`);
+        console.log(`   Job ID: ${uploadResult.jobId}`);
+        console.log(`   Totale chunk: ${uploadResult.totalChunks}`);
 
         setProgress(20);
 
-        console.log('🔄 Avvio elaborazione...');
+        console.log(`\n🔄 FASE 2/3: Avvio elaborazione chunking...`);
         edgeFunctionService.startProcessing(uploadResult.jobId).catch(err => {
-          console.error('Errore elaborazione:', err);
+          console.error('❌ Errore elaborazione:', err);
         });
 
+        console.log(`\n📊 FASE 3/3: Monitoraggio progresso...`);
+
+        let lastCompletedChunks = 0;
         const checkInterval = setInterval(async () => {
           try {
             const status = await edgeFunctionService.getJobStatus(uploadResult.jobId);
             const percentComplete = (status.job.completed_chunks / status.job.total_chunks) * 70;
             setProgress(20 + Math.round(percentComplete));
 
-            console.log(`📊 Progresso: ${status.job.completed_chunks}/${status.job.total_chunks} chunk`);
+            if (status.job.completed_chunks > lastCompletedChunks) {
+              console.log(`   ✓ Chunk ${status.job.completed_chunks}/${status.job.total_chunks} completato [${status.job.status}]`);
+              lastCompletedChunks = status.job.completed_chunks;
+            }
 
             if (status.job.status === 'completed') {
               clearInterval(checkInterval);
+              console.log(`\n🎉 TRASCRIZIONE COMPLETATA!`);
+              console.log(`📝 Lunghezza testo: ${status.job.transcription_text?.length || 0} caratteri`);
               setProgress(100);
 
               if (status.job.transcription_text) {
                 onTranscriptionResult(status.job.transcription_text);
               }
+
+              setTimeout(() => {
+                setIsTranscribing(false);
+                setProgress(0);
+              }, 2000);
+
             } else if (status.job.status === 'failed') {
               clearInterval(checkInterval);
+              console.error(`❌ ELABORAZIONE FALLITA: ${status.job.error_message}`);
               throw new Error(status.job.error_message || 'Elaborazione fallita');
             }
           } catch (err: any) {
@@ -97,7 +125,9 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
 
         setTimeout(() => {
           clearInterval(checkInterval);
-          if (progress < 100) {
+          const currentProgress = progress;
+          if (currentProgress < 100) {
+            console.error(`❌ TIMEOUT: elaborazione troppo lunga (>10min)`);
             setError('Timeout: elaborazione troppo lunga');
             setIsTranscribing(false);
           }
@@ -105,13 +135,13 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       }
 
     } catch (err: any) {
-      console.error('❌ Errore trascrizione:', err);
+      console.error(`\n❌ ========== ERRORE ==========`);
+      console.error(`Tipo: ${err.name}`);
+      console.error(`Messaggio: ${err.message}`);
+      console.error(`Stack:`, err.stack);
       setError(err.message);
-    } finally {
-      if (progress === 100) {
-        setIsTranscribing(false);
-        setTimeout(() => setProgress(0), 3000);
-      }
+      setIsTranscribing(false);
+      setProgress(0);
     }
   };
 

@@ -78,46 +78,60 @@ class EdgeFunctionService {
     audioFile: File,
     language: string = 'it'
   ): Promise<ChunkedJobResult> {
+    console.log(`[EdgeService] uploadForChunking - File: ${audioFile.name}, Size: ${audioFile.size}`);
+
     const formData = new FormData();
     formData.append('file', audioFile);
     formData.append('language', language);
 
-    const response = await fetch(
-      `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=upload`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.supabaseKey}`,
-        },
-        body: formData,
-      }
-    );
+    const url = `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=upload`;
+    console.log(`[EdgeService] POST ${url}`);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.supabaseKey}`,
+      },
+      body: formData,
+    });
+
+    console.log(`[EdgeService] Response status: ${response.status}`);
 
     if (!response.ok) {
       const error = await response.json();
+      console.error(`[EdgeService] Error:`, error);
       throw new Error(error.error || 'Errore durante upload');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`[EdgeService] Upload result:`, result);
+    return result;
   }
 
   async startProcessing(jobId: string): Promise<TranscriptionResult> {
-    const response = await fetch(
-      `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process&jobId=${jobId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.supabaseKey}`,
-        },
-      }
-    );
+    console.log(`[EdgeService] startProcessing - JobID: ${jobId}`);
+
+    const url = `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process&jobId=${jobId}`;
+    console.log(`[EdgeService] POST ${url}`);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.supabaseKey}`,
+      },
+    });
+
+    console.log(`[EdgeService] Response status: ${response.status}`);
 
     if (!response.ok) {
       const error = await response.json();
+      console.error(`[EdgeService] Processing error:`, error);
       throw new Error(error.error || 'Errore durante elaborazione');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`[EdgeService] Processing result:`, result);
+    return result;
   }
 
   async getJobStatus(jobId: string): Promise<JobStatus> {
