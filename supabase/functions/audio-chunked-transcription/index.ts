@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import OpenAI from "npm:openai@4.63.0";
+import OpenAI from "npm:openai@4.68.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +10,87 @@ const corsHeaders = {
 
 const CHUNK_SIZE = 24 * 1024 * 1024;
 
+// Funzione per elaborare il job in background
+async function processJobInBackground(jobId: string, job: any) {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
+  const openai = new OpenAI({
+    apiKey: Deno.env.get("OPENAI_API_KEY") ?? "",
+  });
+
+  try {
+    await supabase
+      .from("transcription_jobs")
+      .update({ status: "processing" })
+      .eq("id", jobId);
+
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("audio-files")
+      .download(job.storage_path);
+
+    if (downloadError || !fileData) {
+      await supabase
+        .from("transcription_jobs")
+        .update({ status: "failed", error_message: "Errore download file" })
+        .eq("id", jobId);
+      return;
+    }
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
+    const transcriptions: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+      const chunkBuffer = arrayBuffer.slice(start, end);
+
+      const chunkBlob = new Blob([chunkBuffer], { type: "audio/mpeg" });
+      const chunkFile = new File([chunkBlob], `chunk-${i}.mp3`, { type: "audio/mpeg" });
+
+      const transcription = await openai.audio.transcriptions.create({
+        file: chunkFile,
+        model: "whisper-1",
+        language: job.language,
+      });
+
+      transcriptions.push(transcription.text);
+
+      await supabase
+        .from("transcription_jobs")
+        .update({ completed_chunks: i + 1 })
+        .eq("id", jobId);
+    }
+
+    const fullText = transcriptions.join(" ");
+
+    await supabase
+      .from("transcription_jobs")
+      .update({
+        status: "completed",
+        transcription_text: fullText,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    await supabase.storage
+      .from("audio-files")
+      .remove([job.storage_path]);
+
+  } catch (error: any) {
+    await supabase
+      .from("transcription_jobs")
+      .update({
+        status: "failed",
+        error_message: error.message || "Errore sconosciuto",
+      })
+      .eq("id", jobId);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -18,78 +99,75 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-
-  if (!openaiApiKey) {
-    return new Response(
-      JSON.stringify({ error: "OPENAI_API_KEY non configurata" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  const openai = new OpenAI({ apiKey: openaiApiKey });
-
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "upload";
+    const action = url.searchParams.get("action");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const openai = new OpenAI({
+      apiKey: Deno.env.get("OPENAI_API_KEY") ?? "",
+    });
 
     if (action === "upload") {
       const formData = await req.formData();
-      const audioFile = formData.get("file") as File;
-      const language = formData.get("language") as string || "it";
+      const file = formData.get("file") as File;
+      const language = (formData.get("language") as string) || "it";
 
-      if (!audioFile) {
+      if (!file) {
         return new Response(
           JSON.stringify({ error: "File mancante" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const jobId = crypto.randomUUID();
-      const storagePath = `temp/${jobId}/${audioFile.name}`;
+      const fileId = crypto.randomUUID();
+      const fileName = `${fileId}.mp3`;
 
       const { error: uploadError } = await supabase.storage
         .from("audio-files")
-        .upload(storagePath, audioFile, {
-          contentType: audioFile.type,
+        .upload(fileName, file, {
+          contentType: file.type,
           upsert: false,
         });
 
       if (uploadError) {
         return new Response(
-          JSON.stringify({ error: `Errore upload: ${uploadError.message}` }),
+          JSON.stringify({ error: "Errore upload" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const totalChunks = Math.ceil(audioFile.size / CHUNK_SIZE);
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-      const { data: job, error: dbError } = await supabase
+      const { data: job, error: jobError } = await supabase
         .from("transcription_jobs")
         .insert({
-          id: jobId,
-          filename: audioFile.name,
-          file_size: audioFile.size,
-          language,
+          storage_path: fileName,
+          language: language,
           total_chunks: totalChunks,
-          storage_path: storagePath,
+          completed_chunks: 0,
           status: "pending",
         })
         .select()
         .single();
 
-      if (dbError) {
+      if (jobError || !job) {
         return new Response(
-          JSON.stringify({ error: `Errore database: ${dbError.message}` }),
+          JSON.stringify({ error: "Errore creazione job" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
-        JSON.stringify({ success: true, jobId, totalChunks }),
+        JSON.stringify({
+          success: true,
+          jobId: job.id,
+          totalChunks: totalChunks,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -117,70 +195,16 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      await supabase
-        .from("transcription_jobs")
-        .update({ status: "processing" })
-        .eq("id", jobId);
+      // Avvia elaborazione in background (non aspettare)
+      processJobInBackground(jobId, job);
 
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from("audio-files")
-        .download(job.storage_path);
-
-      if (downloadError || !fileData) {
-        await supabase
-          .from("transcription_jobs")
-          .update({ status: "failed", error_message: "Errore download file" })
-          .eq("id", jobId);
-
-        return new Response(
-          JSON.stringify({ error: "Errore download file" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const arrayBuffer = await fileData.arrayBuffer();
-      const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
-      const transcriptions: string[] = [];
-
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
-        const chunkBuffer = arrayBuffer.slice(start, end);
-
-        const chunkBlob = new Blob([chunkBuffer], { type: "audio/mpeg" });
-        const chunkFile = new File([chunkBlob], `chunk-${i}.mp3`, { type: "audio/mpeg" });
-
-        const transcription = await openai.audio.transcriptions.create({
-          file: chunkFile,
-          model: "whisper-1",
-          language: job.language,
-        });
-
-        transcriptions.push(transcription.text);
-
-        await supabase
-          .from("transcription_jobs")
-          .update({ completed_chunks: i + 1 })
-          .eq("id", jobId);
-      }
-
-      const fullText = transcriptions.join(" ");
-
-      await supabase
-        .from("transcription_jobs")
-        .update({
-          status: "completed",
-          transcription_text: fullText,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", jobId);
-
-      await supabase.storage
-        .from("audio-files")
-        .remove([job.storage_path]);
-
+      // Ritorna subito
       return new Response(
-        JSON.stringify({ success: true, text: fullText }),
+        JSON.stringify({
+          success: true,
+          message: "Elaborazione avviata in background",
+          jobId: jobId
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -209,7 +233,10 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, job }),
+        JSON.stringify({
+          success: true,
+          job: job,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -218,11 +245,9 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ error: "Azione non valida" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
-  } catch (error) {
-    console.error("Errore:", error);
+  } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message || "Errore sconosciuto" }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
