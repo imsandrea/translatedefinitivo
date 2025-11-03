@@ -108,32 +108,44 @@ class EdgeFunctionService {
     return result;
   }
 
-  async pollJobStatus(
-    jobId: string,
-    onProgress?: (completed: number, total: number) => void
-  ): Promise<string> {
-    console.log(`[EdgeService] Starting polling for job: ${jobId}`);
+  async processChunk(jobId: string, chunkIndex: number, retries: number = 3): Promise<any> {
+    console.log(`[EdgeService] processChunk - JobID: ${jobId}, Chunk: ${chunkIndex}`);
 
-    while (true) {
-      const status = await this.getJobStatus(jobId);
-      const job = status.job;
+    const url = `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process-chunk&jobId=${jobId}&chunkIndex=${chunkIndex}`;
 
-      console.log(`[EdgeService] Job status: ${job.status}, Progress: ${job.completed_chunks}/${job.total_chunks}`);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-      if (onProgress) {
-        onProgress(job.completed_chunks, job.total_chunks);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.supabaseKey}`,
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error(`[EdgeService] Chunk ${chunkIndex} error:`, error);
+          throw new Error(error.error || `Errore chunk ${chunkIndex}`);
+        }
+
+        const result = await response.json();
+        console.log(`[EdgeService] Chunk ${chunkIndex} result:`, result);
+        return result;
+      } catch (error: any) {
+        console.warn(`[EdgeService] Tentativo ${attempt}/${retries} fallito per chunk ${chunkIndex}:`, error.message);
+
+        if (attempt === retries) {
+          throw new Error(`Chunk ${chunkIndex} fallito dopo ${retries} tentativi: ${error.message}`);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
       }
-
-      if (job.status === 'completed') {
-        console.log(`[EdgeService] Job completed successfully`);
-        return job.transcription_text || '';
-      }
-
-      if (job.status === 'failed') {
-        throw new Error(job.error_message || 'Trascrizione fallita');
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 

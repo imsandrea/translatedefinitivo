@@ -173,26 +173,43 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      (async () => {
-        try {
-          await supabase
-            .from("transcription_jobs")
-            .update({ status: "processing" })
-            .eq("id", job.id);
-
-          for (let i = 0; i < totalChunks; i++) {
-            await processChunkInBackground(supabase, openai, job.id, i);
-          }
-        } catch (error: any) {
-          console.error("Background processing error:", error);
-        }
-      })();
-
       return new Response(
         JSON.stringify({
           success: true,
           jobId: job.id,
           totalChunks: totalChunks,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "process-chunk") {
+      const jobId = url.searchParams.get("jobId");
+      const chunkIndexStr = url.searchParams.get("chunkIndex");
+
+      if (!jobId || chunkIndexStr === null) {
+        return new Response(
+          JSON.stringify({ error: "jobId o chunkIndex mancante" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const chunkIndex = parseInt(chunkIndexStr);
+
+      const result = await processChunkInBackground(supabase, openai, jobId, chunkIndex);
+
+      if (chunkIndex === 0) {
+        await supabase
+          .from("transcription_jobs")
+          .update({ status: "processing" })
+          .eq("id", jobId);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          chunkIndex: result.chunkIndex,
+          isLastChunk: result.isLastChunk,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
