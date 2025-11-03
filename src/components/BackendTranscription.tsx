@@ -216,6 +216,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           <option value="es">🇪🇸 Spagnolo</option>
           <option value="fr">🇫🇷 Francese</option>
           <option value="de">🇩🇪 Tedesco</option>
+          <option value="pt">🇵🇹 Portoghese</option>
         </select>
       </div>
 
