@@ -4,12 +4,8 @@ import OpenAI from "npm:openai@4.63.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, apikey",
 };
-
-const openai = new OpenAI({
-  apiKey: Deno.env.get("OPENAI_API_KEY"),
-});
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -20,6 +16,24 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+
+    if (!openaiApiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "OPENAI_API_KEY non configurata. Contatta l'amministratore."
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
     const formData = await req.formData();
     const audioFile = formData.get("file") as File;
     const language = formData.get("language") as string || "it";
