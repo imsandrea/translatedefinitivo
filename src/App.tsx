@@ -105,7 +105,7 @@ function App() {
                 >
                   <div className="flex items-center space-x-2">
                     <Server className="w-4 h-4" />
-                    <span>Backend Server</span>
+                    <span>Cloud</span>
                   </div>
                 </button>
                 
@@ -197,7 +197,7 @@ function App() {
                   >
                     <div className="flex items-center space-x-2">
                       <Server className="w-4 h-4" />
-                      <span>Backend Server</span>
+                      <span>Cloud</span>
                     </div>
                   </button>
 

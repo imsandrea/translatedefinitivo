@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music, Rocket } from 'lucide-react';
-import { serverProcessingService, ProcessingProgress } from '../services/serverProcessingService';
+import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music, Rocket, Cloud } from 'lucide-react';
+import { edgeFunctionService } from '../services/edgeFunctionService';
 
 interface BackendTranscriptionProps {
   audioFile: File | null;
@@ -12,7 +12,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   onTranscriptionResult
 }) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [progress, setProgress] = useState<ProcessingProgress | null>(null);
+  const [progress, setProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<boolean | null>(null);
   const [language, setLanguage] = useState('it');
@@ -22,111 +22,67 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   }, []);
 
   const checkServerStatus = async () => {
-    const isOnline = await serverProcessingService.checkHealth();
+    const isOnline = await edgeFunctionService.checkHealth();
     setServerStatus(isOnline);
   };
 
   const startSmartTranscription = async () => {
     if (!audioFile) return;
 
+    const maxSize = 25 * 1024 * 1024;
+    if (audioFile.size > maxSize) {
+      setError('File troppo grande. Massimo 25MB. Usa la modalità "Browser (Chunking)" per file più grandi.');
+      return;
+    }
+
     setIsTranscribing(true);
     setError(null);
-    setProgress({
-      phase: 'uploading',
-      percentage: 0,
-      message: 'Preparazione...'
-    });
+    setProgress(10);
 
     try {
-      console.log('🚀 Invio file al server per elaborazione completa...');
+      console.log('🚀 Invio file a Supabase Edge Function...');
 
-      const result = await serverProcessingService.processFile(
-        audioFile,
-        {
-          transcribeNow: true,
-          language,
-          chunkDurationMinutes: 10
-        },
-        (progressUpdate) => {
-          setProgress(progressUpdate);
-          console.log(`📊 Progresso: ${progressUpdate.message} (${progressUpdate.percentage}%)`);
-        }
-      );
+      setProgress(30);
 
-      console.log('✅ Elaborazione completata:', result);
-
-      if (result.transcription) {
-        onTranscriptionResult(result.transcription.fullText);
-      }
-
-      setProgress({
-        phase: 'complete',
-        percentage: 100,
-        message: 'Completato!'
+      const result = await edgeFunctionService.transcribeAudio(audioFile, {
+        language,
       });
 
+      console.log('✅ Trascrizione completata:', result);
+
+      setProgress(90);
+
+      if (result.success && result.text) {
+        onTranscriptionResult(result.text);
+      }
+
+      setProgress(100);
+
     } catch (err: any) {
-      console.error('❌ Errore elaborazione:', err);
+      console.error('❌ Errore trascrizione:', err);
       setError(err.message);
     } finally {
       setIsTranscribing(false);
-      setTimeout(() => setProgress(null), 3000);
+      setTimeout(() => setProgress(0), 3000);
     }
   };
 
-  // Server offline
   if (serverStatus === false) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Server Backend Non Disponibile
+            Servizio Cloud in Attesa
           </h3>
           <p className="text-gray-600 mb-4">
-            Il server per l'elaborazione audio/video non è raggiungibile.
+            Il servizio di trascrizione cloud Supabase non è ancora pronto.
           </p>
-          
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-left">
-            <h4 className="font-medium text-red-800 mb-2">Per avviare il server backend:</h4>
-            <ol className="text-sm text-red-700 space-y-1">
-              <li className="flex items-start space-x-2">
-                <span className="font-bold text-red-800">1.</span>
-                <div>
-                  <p className="font-medium">Installa FFmpeg (necessario per video):</p>
-                  <div className="mt-1 space-y-1">
-                    <p><strong>Windows:</strong> Scarica da ffmpeg.org</p>
-                    <p><strong>macOS:</strong> <code className="bg-red-100 px-1 rounded">brew install ffmpeg</code></p>
-                    <p><strong>Linux:</strong> <code className="bg-red-100 px-1 rounded">sudo apt install ffmpeg</code></p>
-                  </div>
-                </div>
-              </li>
-              <li className="flex items-start space-x-2">
-                <span className="font-bold text-red-800">2.</span>
-                <div>
-                  <p>Apri terminale in <code className="bg-red-100 px-1 rounded">server/</code></p>
-                  <p><code className="bg-red-100 px-1 rounded">cd server && npm install</code></p>
-                </div>
-              </li>
-              <li className="flex items-start space-x-2">
-                <span className="font-bold text-red-800">3.</span>
-                <div>
-                  <p>Configura <code className="bg-red-100 px-1 rounded">.env</code> con la tua API Key OpenAI</p>
-                </div>
-              </li>
-              <li className="flex items-start space-x-2">
-                <span className="font-bold text-red-800">4.</span>
-                <div>
-                  <p>Avvia server: <code className="bg-red-100 px-1 rounded">npm run dev</code></p>
-                </div>
-              </li>
-            </ol>
-            
-            <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded">
-              <p className="text-sm text-yellow-800">
-                <strong>⚠️ FFmpeg è essenziale</strong> per elaborare video e audio grandi!
-              </p>
-            </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+            <p className="text-sm text-blue-800 mb-2">
+              La Edge Function Supabase potrebbe impiegare alcuni secondi per attivarsi al primo avvio.
+            </p>
           </div>
 
           <button
@@ -147,16 +103,16 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">
-            <Rocket className="w-6 h-6 inline-block mr-2 text-blue-600" />
-            Trascrizione Smart Server
+            <Cloud className="w-6 h-6 inline-block mr-2 text-blue-600" />
+            Trascrizione Cloud
           </h3>
           <p className="text-sm text-gray-600">
-            Elaborazione automatica: video → audio → chunk → whisper
+            Elaborazione serverless con Supabase Edge Functions
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Server className="w-5 h-5 text-green-500" />
-          <span className="text-sm font-medium text-green-600">Server Online</span>
+          <CheckCircle className="w-5 h-5 text-green-500" />
+          <span className="text-sm font-medium text-green-600">Online</span>
         </div>
       </div>
 
@@ -201,36 +157,30 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
         <button
           onClick={startSmartTranscription}
           disabled={isTranscribing}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
+          className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
         >
-          <Rocket className="w-6 h-6" />
+          <Cloud className="w-6 h-6" />
           <span className="text-lg">
             {isTranscribing
-              ? 'Elaborazione in corso sul server...'
-              : 'Avvia Trascrizione Smart Server'
+              ? 'Trascrizione Cloud in corso...'
+              : 'Avvia Trascrizione Cloud'
             }
           </span>
         </button>
       )}
 
-      {/* Progress Bar */}
-      {progress && (
-        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      {progress > 0 && (
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
-            <span className="font-medium">{progress.message}</span>
-            <span className="font-bold text-blue-600">{progress.percentage}%</span>
+            <span className="font-medium">Elaborazione in corso...</span>
+            <span className="font-bold text-blue-600">{progress}%</span>
           </div>
           <div className="w-full bg-blue-200 rounded-full h-3">
             <div
-              className="bg-gradient-to-r from-blue-600 to-purple-600 h-3 rounded-full transition-all duration-300"
-              style={{ width: `${progress.percentage}%` }}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
             />
           </div>
-          {progress.currentSegment && progress.totalSegments && (
-            <div className="mt-2 text-xs text-gray-600">
-              Segmento {progress.currentSegment} di {progress.totalSegments}
-            </div>
-          )}
         </div>
       )}
 
@@ -245,18 +195,18 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       )}
 
       {/* Info */}
-      <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+      <div className="mt-6 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
         <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
           <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-          Vantaggi Trascrizione Smart Server
+          Vantaggi Trascrizione Cloud
         </h4>
         <div className="text-sm text-gray-700 space-y-1.5">
-          <p>✅ <strong>Zero carico sul browser</strong> - tutto il lavoro pesante sul server</p>
-          <p>✅ <strong>Video supportati</strong> - estrazione automatica audio con FFmpeg</p>
-          <p>✅ <strong>File grandi OK</strong> - chunking automatico lato server</p>
-          <p>✅ <strong>Molto più veloce</strong> - FFmpeg nativo vs browser</p>
-          <p>✅ <strong>Pulizia automatica</strong> - file temporanei eliminati dopo trascrizione</p>
-          <p>✅ <strong>Limite: 500MB</strong> - audio o video</p>
+          <p>✅ <strong>Serverless</strong> - nessun server da gestire</p>
+          <p>✅ <strong>Sempre disponibile</strong> - infrastruttura Supabase</p>
+          <p>✅ <strong>Zero configurazione</strong> - funziona subito</p>
+          <p>✅ <strong>Sicuro</strong> - API key protette lato server</p>
+          <p>✅ <strong>Scalabile</strong> - gestisce carichi elevati automaticamente</p>
+          <p>⚠️ <strong>Limite: 25MB</strong> - per file più grandi usa il chunking browser</p>
         </div>
       </div>
     </div>
