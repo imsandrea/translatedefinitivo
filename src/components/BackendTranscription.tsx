@@ -27,6 +27,8 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   };
 
   const startSmartTranscription = async () => {
+    console.log('🔘 Pulsante cliccato! audioFile:', audioFile ? `${audioFile.name} (${audioFile.size})` : 'NULL');
+
     if (!audioFile) {
       console.log('❌ Nessun file caricato');
       return;
@@ -175,6 +177,8 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   }
 
   const isVideo = audioFile ? audioFile.type.startsWith('video/') : false;
+
+  console.log('[BackendTranscription] Render - audioFile:', audioFile ? audioFile.name : 'NULL', 'serverStatus:', serverStatus);
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">

@@ -25,12 +25,16 @@ function App() {
   };
 
   const handleFileChange = (file: File | null) => {
+    console.log('[App] handleFileChange:', file ? file.name : 'NULL');
     // Azzera tutto quando cambia il file
     setAudioFile(file);
     setTranscription('');
     setCurrentTime(0);
     setDuration(0);
-    setActiveTab('services');
+    // Non cambiare tab se l'utente è già su backend
+    if (activeTab !== 'backend') {
+      setActiveTab('services');
+    }
   };
 
   const handleTranscriptionChange = (text: string) => {
@@ -242,10 +246,13 @@ function App() {
               )}
               
               {activeTab === 'backend' && (
-                <BackendTranscription
-                  audioFile={audioFile}
-                  onTranscriptionResult={handleTranscriptionResult}
-                />
+                <>
+                  {console.log('[App] Rendering BackendTranscription with audioFile:', audioFile ? audioFile.name : 'NULL')}
+                  <BackendTranscription
+                    audioFile={audioFile}
+                    onTranscriptionResult={handleTranscriptionResult}
+                  />
+                </>
               )}
               
               {activeTab === 'deploy' && (
