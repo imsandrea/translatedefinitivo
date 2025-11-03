@@ -10,7 +10,6 @@ const corsHeaders = {
 
 const CHUNK_SIZE = 24 * 1024 * 1024;
 
-// Funzione per elaborare il job in background
 async function processJobInBackground(jobId: string, job: any) {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -146,6 +145,8 @@ Deno.serve(async (req: Request) => {
       const { data: job, error: jobError } = await supabase
         .from("transcription_jobs")
         .insert({
+          filename: file.name,
+          file_size: file.size,
           storage_path: fileName,
           language: language,
           total_chunks: totalChunks,
@@ -195,10 +196,8 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Avvia elaborazione in background (non aspettare)
       processJobInBackground(jobId, job);
 
-      // Ritorna subito
       return new Response(
         JSON.stringify({
           success: true,
