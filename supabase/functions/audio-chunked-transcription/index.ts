@@ -8,7 +8,97 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, apikey",
 };
 
-const CHUNK_SIZE = 10 * 1024 * 1024;
+const CHUNK_SIZE = 5 * 1024 * 1024;
+
+async function processChunkInBackground(
+  supabase: any,
+  openai: OpenAI,
+  jobId: string,
+  chunkIndex: number
+) {
+  try {
+    const { data: job, error: jobError } = await supabase
+      .from("transcription_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .single();
+
+    if (jobError || !job) {
+      throw new Error("Job non trovato");
+    }
+
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("audio-files")
+      .download(job.storage_path);
+
+    if (downloadError || !fileData) {
+      throw new Error("Errore download file");
+    }
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    const start = chunkIndex * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+    const chunkBuffer = arrayBuffer.slice(start, end);
+
+    const chunkBlob = new Blob([chunkBuffer], { type: "audio/mpeg" });
+    const chunkFile = new File([chunkBlob], `chunk-${chunkIndex}.mp3`, { type: "audio/mpeg" });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: chunkFile,
+      model: "whisper-1",
+      language: job.language,
+    });
+
+    const newCompletedChunks = chunkIndex + 1;
+    const isLastChunk = newCompletedChunks >= job.total_chunks;
+
+    const { data: currentJob } = await supabase
+      .from("transcription_jobs")
+      .select("transcription_text")
+      .eq("id", jobId)
+      .single();
+
+    const existingText = currentJob?.transcription_text || "";
+    const updatedText = existingText + (existingText ? " " : "") + transcription.text;
+
+    if (isLastChunk) {
+      await supabase
+        .from("transcription_jobs")
+        .update({
+          status: "completed",
+          transcription_text: updatedText,
+          completed_chunks: newCompletedChunks,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+
+      await supabase.storage
+        .from("audio-files")
+        .remove([job.storage_path]);
+    } else {
+      await supabase
+        .from("transcription_jobs")
+        .update({
+          transcription_text: updatedText,
+          completed_chunks: newCompletedChunks,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
+
+    return { success: true, chunkIndex, isLastChunk };
+  } catch (error: any) {
+    await supabase
+      .from("transcription_jobs")
+      .update({
+        status: "failed",
+        error_message: error.message,
+      })
+      .eq("id", jobId);
+
+    throw error;
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -83,132 +173,26 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      (async () => {
+        try {
+          await supabase
+            .from("transcription_jobs")
+            .update({ status: "processing" })
+            .eq("id", job.id);
+
+          for (let i = 0; i < totalChunks; i++) {
+            await processChunkInBackground(supabase, openai, job.id, i);
+          }
+        } catch (error: any) {
+          console.error("Background processing error:", error);
+        }
+      })();
+
       return new Response(
         JSON.stringify({
           success: true,
           jobId: job.id,
           totalChunks: totalChunks,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (action === "process-chunk") {
-      const jobId = url.searchParams.get("jobId");
-      const chunkIndexStr = url.searchParams.get("chunkIndex");
-
-      if (!jobId || chunkIndexStr === null) {
-        return new Response(
-          JSON.stringify({ error: "jobId o chunkIndex mancante" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const chunkIndex = parseInt(chunkIndexStr);
-
-      const { data: job, error: jobError } = await supabase
-        .from("transcription_jobs")
-        .select("*")
-        .eq("id", jobId)
-        .single();
-
-      if (jobError || !job) {
-        return new Response(
-          JSON.stringify({ error: "Job non trovato" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      if (chunkIndex === 0) {
-        await supabase
-          .from("transcription_jobs")
-          .update({ status: "processing" })
-          .eq("id", jobId);
-      }
-
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from("audio-files")
-        .download(job.storage_path);
-
-      if (downloadError || !fileData) {
-        await supabase
-          .from("transcription_jobs")
-          .update({ status: "failed", error_message: "Errore download file" })
-          .eq("id", jobId);
-
-        return new Response(
-          JSON.stringify({ error: "Errore download file" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const arrayBuffer = await fileData.arrayBuffer();
-      const start = chunkIndex * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
-      const chunkBuffer = arrayBuffer.slice(start, end);
-
-      const chunkBlob = new Blob([chunkBuffer], { type: "audio/mpeg" });
-      const chunkFile = new File([chunkBlob], `chunk-${chunkIndex}.mp3`, { type: "audio/mpeg" });
-
-      const transcription = await openai.audio.transcriptions.create({
-        file: chunkFile,
-        model: "whisper-1",
-        language: job.language,
-      });
-
-      const newCompletedChunks = chunkIndex + 1;
-      const isLastChunk = newCompletedChunks >= job.total_chunks;
-
-      if (isLastChunk) {
-        const { data: currentJob } = await supabase
-          .from("transcription_jobs")
-          .select("transcription_text")
-          .eq("id", jobId)
-          .single();
-
-        const existingText = currentJob?.transcription_text || "";
-        const fullText = existingText + (existingText ? " " : "") + transcription.text;
-
-        await supabase
-          .from("transcription_jobs")
-          .update({
-            status: "completed",
-            transcription_text: fullText,
-            completed_chunks: newCompletedChunks,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-
-        await supabase.storage
-          .from("audio-files")
-          .remove([job.storage_path]);
-      } else {
-        const { data: currentJob } = await supabase
-          .from("transcription_jobs")
-          .select("transcription_text")
-          .eq("id", jobId)
-          .single();
-
-        const existingText = currentJob?.transcription_text || "";
-        const updatedText = existingText + (existingText ? " " : "") + transcription.text;
-
-        await supabase
-          .from("transcription_jobs")
-          .update({
-            transcription_text: updatedText,
-            completed_chunks: newCompletedChunks,
-          })
-          .eq("id", jobId);
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          chunkIndex: chunkIndex,
-          completed: newCompletedChunks,
-          total: job.total_chunks,
-          isLastChunk: isLastChunk,
-          chunkText: transcription.text
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
