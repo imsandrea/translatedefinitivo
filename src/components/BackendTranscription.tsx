@@ -80,60 +80,38 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
 
         setProgress(20);
 
-        console.log(`\n🔄 FASE 2/3: Avvio elaborazione chunking...`);
-        edgeFunctionService.startProcessing(uploadResult.jobId).catch(err => {
-          console.error('❌ Errore elaborazione:', err);
-        });
+        console.log(`\n🔄 FASE 2/3: Elaborazione chunk sequenziale...`);
 
-        console.log(`\n📊 FASE 3/3: Monitoraggio progresso...`);
+        for (let i = 0; i < uploadResult.totalChunks; i++) {
+          console.log(`📦 Elaborazione chunk ${i + 1}/${uploadResult.totalChunks}...`);
 
-        let lastCompletedChunks = 0;
-        const checkInterval = setInterval(async () => {
-          try {
-            const status = await edgeFunctionService.getJobStatus(uploadResult.jobId);
-            const percentComplete = (status.job.completed_chunks / status.job.total_chunks) * 70;
-            setProgress(20 + Math.round(percentComplete));
+          const chunkResult = await edgeFunctionService.processChunk(uploadResult.jobId, i);
 
-            if (status.job.completed_chunks > lastCompletedChunks) {
-              console.log(`   ✓ Chunk ${status.job.completed_chunks}/${status.job.total_chunks} completato [${status.job.status}]`);
-              lastCompletedChunks = status.job.completed_chunks;
-            }
+          const percentComplete = ((i + 1) / uploadResult.totalChunks) * 70;
+          setProgress(20 + Math.round(percentComplete));
 
-            if (status.job.status === 'completed') {
-              clearInterval(checkInterval);
-              console.log(`\n🎉 TRASCRIZIONE COMPLETATA!`);
-              console.log(`📝 Lunghezza testo: ${status.job.transcription_text?.length || 0} caratteri`);
-              setProgress(100);
+          console.log(`   ✅ Chunk ${i + 1} completato`);
+          console.log(`   📝 Testo: ${chunkResult.chunkText.substring(0, 100)}...`);
+        }
 
-              if (status.job.transcription_text) {
-                onTranscriptionResult(status.job.transcription_text);
-              }
+        console.log(`\n📊 FASE 3/3: Recupero risultato finale...`);
+        const finalStatus = await edgeFunctionService.getJobStatus(uploadResult.jobId);
 
-              setTimeout(() => {
-                setIsTranscribing(false);
-                setProgress(0);
-              }, 2000);
+        if (finalStatus.job.status === 'completed' && finalStatus.job.transcription_text) {
+          console.log(`\n🎉 TRASCRIZIONE COMPLETATA!`);
+          console.log(`📝 Lunghezza testo: ${finalStatus.job.transcription_text.length} caratteri`);
+          setProgress(100);
 
-            } else if (status.job.status === 'failed') {
-              clearInterval(checkInterval);
-              console.error(`❌ ELABORAZIONE FALLITA: ${status.job.error_message}`);
-              throw new Error(status.job.error_message || 'Elaborazione fallita');
-            }
-          } catch (err: any) {
-            clearInterval(checkInterval);
-            throw err;
-          }
-        }, 2000);
+          onTranscriptionResult(finalStatus.job.transcription_text);
 
-        setTimeout(() => {
-          clearInterval(checkInterval);
-          const currentProgress = progress;
-          if (currentProgress < 100) {
-            console.error(`❌ TIMEOUT: elaborazione troppo lunga (>10min)`);
-            setError('Timeout: elaborazione troppo lunga');
+          setTimeout(() => {
             setIsTranscribing(false);
-          }
-        }, 600000);
+            setProgress(0);
+          }, 2000);
+
+        } else {
+          throw new Error(finalStatus.job.error_message || 'Trascrizione non completata');
+        }
       }
 
     } catch (err: any) {

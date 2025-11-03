@@ -108,11 +108,10 @@ class EdgeFunctionService {
     return result;
   }
 
-  async startProcessing(jobId: string): Promise<TranscriptionResult> {
-    console.log(`[EdgeService] startProcessing - JobID: ${jobId}`);
+  async processChunk(jobId: string, chunkIndex: number): Promise<any> {
+    console.log(`[EdgeService] processChunk - JobID: ${jobId}, Chunk: ${chunkIndex}`);
 
-    const url = `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process&jobId=${jobId}`;
-    console.log(`[EdgeService] POST ${url}`);
+    const url = `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process-chunk&jobId=${jobId}&chunkIndex=${chunkIndex}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -121,16 +120,14 @@ class EdgeFunctionService {
       },
     });
 
-    console.log(`[EdgeService] Response status: ${response.status}`);
-
     if (!response.ok) {
       const error = await response.json();
-      console.error(`[EdgeService] Processing error:`, error);
-      throw new Error(error.error || 'Errore durante elaborazione');
+      console.error(`[EdgeService] Chunk ${chunkIndex} error:`, error);
+      throw new Error(error.error || `Errore chunk ${chunkIndex}`);
     }
 
     const result = await response.json();
-    console.log(`[EdgeService] Processing result:`, result);
+    console.log(`[EdgeService] Chunk ${chunkIndex} result:`, result);
     return result;
   }
 
