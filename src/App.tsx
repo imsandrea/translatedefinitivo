@@ -14,7 +14,7 @@ function App() {
   const [transcription, setTranscription] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy' | 'download'>('services');
+  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy' | 'download'>('backend');
 
   const handleVideoProcessing = (processing: boolean) => {
     setIsProcessingVideo(processing);
@@ -161,36 +161,6 @@ function App() {
               <div className="border-b border-gray-200">
                 <nav className="flex space-x-8 px-6">
                   <button
-                    onClick={() => setActiveTab('transcribe')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'transcribe'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                    data-tab="transcribe"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4" />
-                      <span>Editor Trascrizione</span>
-                    </div>
-                  </button>
-                  
-                  <button
-                    onClick={() => setActiveTab('services')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'services'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                    data-tab="services"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Headphones className="w-4 h-4" />
-                      <span>Servizi Trascrizione</span>
-                    </div>
-                  </button>
-                  
-                  <button
                     onClick={() => setActiveTab('backend')}
                     className={`py-4 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'backend'
@@ -201,7 +171,22 @@ function App() {
                   >
                     <div className="flex items-center space-x-2">
                       <Server className="w-4 h-4" />
-                      <span>Cloud</span>
+                      <span>Trascrizione Cloud</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('transcribe')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'transcribe'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    data-tab="transcribe"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Editor</span>
                     </div>
                   </button>
 
@@ -251,6 +236,7 @@ function App() {
                   <BackendTranscription
                     audioFile={audioFile}
                     onTranscriptionResult={handleTranscriptionResult}
+                    onShowEditor={() => setActiveTab('transcribe')}
                   />
                 </>
               )}

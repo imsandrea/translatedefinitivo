@@ -5,17 +5,21 @@ import { edgeFunctionService } from '../services/edgeFunctionService';
 interface BackendTranscriptionProps {
   audioFile: File | null;
   onTranscriptionResult: (text: string) => void;
+  onShowEditor?: () => void;
 }
 
 export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   audioFile,
-  onTranscriptionResult
+  onTranscriptionResult,
+  onShowEditor
 }) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [progress, setProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<boolean | null>(null);
   const [language, setLanguage] = useState('it');
+  const [conversationType, setConversationType] = useState<'meeting' | 'interview' | 'lecture' | 'other'>('meeting');
+  const [transcriptionCompleted, setTranscriptionCompleted] = useState(false);
 
   React.useEffect(() => {
     checkServerStatus();
@@ -60,6 +64,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
 
         if (result.success && result.text) {
           onTranscriptionResult(result.text);
+          setTranscriptionCompleted(true);
         }
 
         setProgress(100);
@@ -103,6 +108,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           setProgress(100);
 
           onTranscriptionResult(finalStatus.job.transcription_text);
+          setTranscriptionCompleted(true);
 
           setTimeout(() => {
             setIsTranscribing(false);
@@ -195,7 +201,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       )}
 
       {/* Language Selection */}
-      <div className="mb-6">
+      <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Lingua Audio
         </label>
@@ -203,6 +209,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          disabled={isTranscribing}
         >
           <option value="it">🇮🇹 Italiano</option>
           <option value="en">🇺🇸 Inglese</option>
@@ -210,6 +217,27 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           <option value="fr">🇫🇷 Francese</option>
           <option value="de">🇩🇪 Tedesco</option>
         </select>
+      </div>
+
+      {/* Conversation Type Selection */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Tipo di Conversazione
+        </label>
+        <select
+          value={conversationType}
+          onChange={(e) => setConversationType(e.target.value as any)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          disabled={isTranscribing}
+        >
+          <option value="meeting">💼 Meeting / Riunione</option>
+          <option value="interview">🎤 Intervista</option>
+          <option value="lecture">🎓 Lezione / Conferenza</option>
+          <option value="other">💬 Conversazione Generale</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1">
+          Questa opzione aiuta a identificare i diversi interlocutori nella trascrizione
+        </p>
       </div>
 
       {/* Smart Transcription Button */}
@@ -251,6 +279,25 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
             <AlertCircle className="w-5 h-5 text-red-600" />
             <p className="text-sm text-red-800">{error}</p>
           </div>
+        </div>
+      )}
+
+      {/* Success and Editor Button */}
+      {transcriptionCompleted && onShowEditor && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-3">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <h4 className="font-semibold text-gray-800">Trascrizione Completata!</h4>
+          </div>
+          <p className="text-sm text-gray-700 mb-4">
+            La trascrizione è stata completata con successo. Clicca il bottone sotto per visualizzare e modificare il testo con evidenziazione degli interlocutori.
+          </p>
+          <button
+            onClick={onShowEditor}
+            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg font-semibold"
+          >
+            <span>Apri Editor Trascrizione</span>
+          </button>
         </div>
       )}
 

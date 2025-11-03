@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Download, Copy, RotateCcw, Sparkles, Languages } from 'lucide-react';
+import { Save, Download, Copy, RotateCcw, Sparkles, Languages, Users } from 'lucide-react';
 import { TextFormattingPanel } from './TextFormattingPanel';
 import { textFormatter } from '../services/textFormatter';
 import { translationService } from '../services/translationService';
+import { detectSpeakers, getSpeakerColor, type SpeakerSegment } from '../services/speakerDiarization';
 
 interface TranscriptionEditorProps {
   transcription: string;
@@ -24,6 +25,8 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
   const [targetLanguage, setTargetLanguage] = useState('en');
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
+  const [showSpeakerView, setShowSpeakerView] = useState(false);
+  const [speakers, setSpeakers] = useState<SpeakerSegment[]>([]);
 
   // Inizializza il formatter e il traduttore con l'API key esistente
   useEffect(() => {
@@ -36,6 +39,13 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
 
   useEffect(() => {
     setLocalTranscription(transcription);
+    if (transcription) {
+      const detectedSpeakers = detectSpeakers(transcription);
+      setSpeakers(detectedSpeakers);
+      if (detectedSpeakers.length > 1) {
+        setShowSpeakerView(true);
+      }
+    }
   }, [transcription]);
 
   useEffect(() => {
@@ -224,6 +234,16 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
           </button>
           
           <button
+            onClick={() => setShowSpeakerView(!showSpeakerView)}
+            disabled={speakers.length === 0}
+            className={`${showSpeakerView ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-600 hover:bg-gray-700'} disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1`}
+            title="Visualizza interlocutori"
+          >
+            <Users className="w-4 h-4" />
+            <span>Interlocutori</span>
+          </button>
+
+          <button
             onClick={() => setShowFormattingPanel(true)}
             disabled={!localTranscription.trim() || localTranscription.length < 50}
             className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1"
@@ -378,14 +398,35 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
 
       {/* Editor */}
       <div className="flex-1">
-        <textarea
-          id="transcription-textarea"
-          value={localTranscription}
-          onChange={handleTextChange}
-          placeholder="Il testo trascritto apparirà qui. Puoi anche scrivere manualmente o modificare la trascrizione automatica..."
-          className="w-full h-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm leading-relaxed transition-all duration-200"
-          style={{ minHeight: '400px' }}
-        />
+        {showSpeakerView && speakers.length > 0 ? (
+          <div className="w-full h-full overflow-y-auto border border-gray-300 rounded-lg p-4 bg-gray-50" style={{ minHeight: '400px' }}>
+            <div className="space-y-4">
+              {speakers.map((segment, index) => (
+                <div key={index} className="bg-white rounded-lg p-4 shadow-sm border-l-4" style={{ borderLeftColor: getSpeakerColor(segment.speaker) }}>
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: getSpeakerColor(segment.speaker) }}
+                    />
+                    <span className="font-semibold text-sm" style={{ color: getSpeakerColor(segment.speaker) }}>
+                      {segment.speaker}
+                    </span>
+                  </div>
+                  <p className="text-gray-800 leading-relaxed">{segment.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <textarea
+            id="transcription-textarea"
+            value={localTranscription}
+            onChange={handleTextChange}
+            placeholder="Il testo trascritto apparirà qui. Puoi anche scrivere manualmente o modificare la trascrizione automatica..."
+            className="w-full h-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm leading-relaxed transition-all duration-200"
+            style={{ minHeight: '400px' }}
+          />
+        )}
       </div>
 
       {/* Footer info */}
