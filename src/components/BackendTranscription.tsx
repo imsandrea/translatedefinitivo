@@ -27,11 +27,19 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   };
 
   const startSmartTranscription = async () => {
-    if (!audioFile) return;
+    if (!audioFile) {
+      console.log('❌ Nessun file caricato');
+      return;
+    }
+
+    console.log(`📊 File: ${audioFile.name}, Dimensione: ${(audioFile.size / 1024 / 1024).toFixed(2)} MB`);
 
     const maxSize = 25 * 1024 * 1024;
     if (audioFile.size > maxSize) {
-      setError('File troppo grande. Massimo 25MB. Usa la modalità "Browser (Chunking)" per file più grandi.');
+      const sizeMB = (audioFile.size / 1024 / 1024).toFixed(2);
+      const errorMsg = `File troppo grande: ${sizeMB} MB. Limite 25MB. Usa la modalità "Browser (Chunking)" nel tab "Trascrizione" per file più grandi.`;
+      setError(errorMsg);
+      console.log('❌', errorMsg);
       return;
     }
 
@@ -198,15 +206,21 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       <div className="mt-6 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
         <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
           <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-          Vantaggi Trascrizione Cloud
+          Trascrizione Cloud
         </h4>
         <div className="text-sm text-gray-700 space-y-1.5">
           <p>✅ <strong>Serverless</strong> - nessun server da gestire</p>
           <p>✅ <strong>Sempre disponibile</strong> - infrastruttura Supabase</p>
           <p>✅ <strong>Zero configurazione</strong> - funziona subito</p>
           <p>✅ <strong>Sicuro</strong> - API key protette lato server</p>
-          <p>✅ <strong>Scalabile</strong> - gestisce carichi elevati automaticamente</p>
-          <p>⚠️ <strong>Limite: 25MB</strong> - per file più grandi usa il chunking browser</p>
+          <p>⚠️ <strong>Limite file: 25MB</strong></p>
+        </div>
+
+        <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
+          <p className="text-sm text-orange-800">
+            <strong>File più grandi di 25MB?</strong><br/>
+            Usa la modalità <strong>"Browser (Chunking)"</strong> nel tab <strong>Trascrizione</strong>
+          </p>
         </div>
       </div>
     </div>
