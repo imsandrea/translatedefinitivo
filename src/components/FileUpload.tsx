@@ -40,48 +40,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   const processFile = async (file: File) => {
     if (isVideoFile(file)) {
-      // È un video - estrai audio
-      setIsProcessingVideo(true);
-      onVideoProcessing?.(true);
-      
+      // È un video - passa il file originale al backend
       try {
-        // Genera anteprima video
         const preview = await videoProcessor.generateVideoPreview(file);
         setVideoPreview(preview);
-        
-        // Estrai audio REALE con FFmpeg.js e analizza durata reale
-        const audioFile = await videoProcessor.extractAudioBrowser(file, (progress) => {
-          console.log(`Estrazione audio: ${progress.percentage}% - ${progress.message}`);
-        });
-        
-        // Ora abbiamo l'audio reale estratto con durata corretta
-        console.log(`✅ Audio estratto: ${audioFile.name}, dimensione: ${(audioFile.size / 1024 / 1024).toFixed(2)}MB`);
-        onFileSelect(audioFile);
-        onAudioExtracted?.(audioFile);
-        
-      } catch (error: any) {
-        console.error('Errore elaborazione video:', error);
-        
-        // Fallback con FFmpeg.js se disponibile
-        try {
-          console.log('Tentativo fallback con FFmpeg.js...');
-          const audioFile = await videoProcessor.extractAudioBrowser(file, (progress) => {
-            console.log(`Fallback estrazione: ${progress.percentage}% - ${progress.message}`);
-          });
-          
-          onFileSelect(audioFile);
-          onAudioExtracted?.(audioFile);
-          
-        } catch (fallbackError: any) {
-          console.error('Anche il fallback è fallito:', fallbackError);
-          // Ultimo fallback: usa il file video originale per il backend
-          console.log('Ultimo fallback: usando file video originale per elaborazione backend');
-          onFileSelect(file);
-        }
-      } finally {
-        setIsProcessingVideo(false);
-        onVideoProcessing?.(false);
+      } catch (error) {
+        console.log('Impossibile generare anteprima video');
       }
+
+      // Passa il file video originale - il server lo elaborerà
+      onFileSelect(file);
     } else if (isAudioFile(file)) {
       // È un file audio normale
       onFileSelect(file);
