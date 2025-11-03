@@ -79,61 +79,17 @@ export const WhisperTranscription: React.FC<WhisperTranscriptionProps> = ({
     addLog(`🎉 AudioScribe caricato! Premi F12 per vedere tutti i log dettagliati.`, 'info');
   }, []);
 
-  // Analizza il file quando viene caricato
+  // Non analizzare più nel browser - il backend lo farà
   useEffect(() => {
     if (audioFile && isApiKeyConfigured) {
-      analyzeAudioFile();
+      addLog(`File caricato: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(2)} MB)`, 'success');
+      addLog(`Il server analizzerà ed elaborerà il file`, 'info');
     }
   }, [audioFile, apiKey]);
 
+  // Analisi non più necessaria - il backend gestisce tutto
   const analyzeAudioFile = async () => {
-    if (!audioFile) return;
-
-    setIsAnalyzing(true);
-    setError(null);
-    addLog(`Iniziando analisi file: ${audioFile.name}`, 'info');
-    addLog(`Dimensione file: ${(audioFile.size / 1024 / 1024).toFixed(2)} MB`, 'info');
-    
-    // Controlla se è un file estratto da video
-    const isExtractedFromVideo = audioFile.type === 'audio/mp3' && 
-                                (audioFile.name.includes('extracted') || 
-                                 (audioFile as any).extractedFromVideo);
-    
-    if (isExtractedFromVideo) {
-      addLog(`File audio estratto da video rilevato`, 'info');
-      // Usa la durata reale se disponibile
-      const realDuration = (audioFile as any).originalDuration;
-      if (realDuration) {
-        addLog(`Durata reale dal video: ${Math.floor(realDuration / 60)}:${Math.floor(realDuration % 60).toString().padStart(2, '0')}`, 'success');
-      }
-    }
-
-    try {
-      const analysis = await audioChunker.analyzeAudioFile(audioFile);
-      setAudioAnalysis(analysis);
-      
-      // Usa la durata reale se disponibile, altrimenti quella analizzata
-      const realDuration = (audioFile as any).originalDuration || analysis.duration;
-      addLog(`Durata audio: ${Math.floor(realDuration / 60)}:${Math.floor(realDuration % 60).toString().padStart(2, '0')}`, 'success');
-      addLog(`Necessita chunking: ${analysis.needsChunking ? 'SÌ' : 'NO'}`, 'info');
-      
-      // Alert per file grandi
-      if (analysis.needsChunking) {
-        addLog(`File grande rilevato (${(audioFile.size / 1024 / 1024).toFixed(1)}MB) - sarà diviso in ${analysis.estimatedChunks} parti`, 'warning');
-        alert(`⚠️ File Grande Rilevato!\n\n` +
-              `Il tuo file è di ${(audioFile.size / 1024 / 1024).toFixed(1)}MB.\n` +
-              `Sarà automaticamente diviso in ${analysis.estimatedChunks} parti da ~10 minuti ciascuna.\n\n` +
-              `Questo garantisce la migliore qualità di trascrizione rispettando i limiti di Whisper (25MB per parte).\n\n` +
-              `Costo stimato: ~$${(realDuration / 60 * 0.006).toFixed(3)}`);
-      } else {
-        addLog('File di dimensioni normali - trascrizione diretta', 'success');
-      }
-    } catch (err: any) {
-      addLog(`Errore durante analisi: ${err.message}`, 'error');
-      setError(`Errore analisi file: ${err.message}`);
-    } finally {
-      setIsAnalyzing(false);
-    }
+    // Questa funzione non è più utilizzata
   };
 
   const handleApiKeySet = (key: string) => {
