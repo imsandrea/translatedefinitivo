@@ -10,6 +10,24 @@ interface TranscriptionResult {
   language?: string;
 }
 
+interface ChunkedJobResult {
+  success: boolean;
+  jobId: string;
+  totalChunks: number;
+}
+
+interface JobStatus {
+  success: boolean;
+  job: {
+    id: string;
+    status: string;
+    completed_chunks: number;
+    total_chunks: number;
+    transcription_text?: string;
+    error_message?: string;
+  };
+}
+
 class EdgeFunctionService {
   private supabaseUrl: string;
   private supabaseKey: string;
@@ -56,6 +74,71 @@ class EdgeFunctionService {
     return response.json();
   }
 
+  async uploadForChunking(
+    audioFile: File,
+    language: string = 'it'
+  ): Promise<ChunkedJobResult> {
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    formData.append('language', language);
+
+    const response = await fetch(
+      `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=upload`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.supabaseKey}`,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Errore durante upload');
+    }
+
+    return response.json();
+  }
+
+  async startProcessing(jobId: string): Promise<TranscriptionResult> {
+    const response = await fetch(
+      `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=process&jobId=${jobId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.supabaseKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Errore durante elaborazione');
+    }
+
+    return response.json();
+  }
+
+  async getJobStatus(jobId: string): Promise<JobStatus> {
+    const response = await fetch(
+      `${this.supabaseUrl}/functions/v1/audio-chunked-transcription?action=status&jobId=${jobId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.supabaseKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Errore durante verifica stato');
+    }
+
+    return response.json();
+  }
+
   async checkHealth(): Promise<boolean> {
     try {
       const response = await fetch(
@@ -75,4 +158,4 @@ class EdgeFunctionService {
 }
 
 export const edgeFunctionService = new EdgeFunctionService();
-export type { TranscriptionResult };
+export type { TranscriptionResult, ChunkedJobResult, JobStatus };

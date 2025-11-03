@@ -34,44 +34,84 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
 
     console.log(`📊 File: ${audioFile.name}, Dimensione: ${(audioFile.size / 1024 / 1024).toFixed(2)} MB`);
 
-    const maxSize = 25 * 1024 * 1024;
-    if (audioFile.size > maxSize) {
-      const sizeMB = (audioFile.size / 1024 / 1024).toFixed(2);
-      const errorMsg = `File troppo grande: ${sizeMB} MB. Limite 25MB. Usa la modalità "Browser (Chunking)" nel tab "Trascrizione" per file più grandi.`;
-      setError(errorMsg);
-      console.log('❌', errorMsg);
-      return;
-    }
-
     setIsTranscribing(true);
     setError(null);
-    setProgress(10);
+    setProgress(5);
 
     try {
-      console.log('🚀 Invio file a Supabase Edge Function...');
+      const smallFileLimit = 25 * 1024 * 1024;
 
-      setProgress(30);
+      if (audioFile.size <= smallFileLimit) {
+        console.log('🚀 File piccolo - trascrizione diretta...');
+        setProgress(10);
 
-      const result = await edgeFunctionService.transcribeAudio(audioFile, {
-        language,
-      });
+        const result = await edgeFunctionService.transcribeAudio(audioFile, {
+          language,
+        });
 
-      console.log('✅ Trascrizione completata:', result);
+        setProgress(90);
 
-      setProgress(90);
+        if (result.success && result.text) {
+          onTranscriptionResult(result.text);
+        }
 
-      if (result.success && result.text) {
-        onTranscriptionResult(result.text);
+        setProgress(100);
+      } else {
+        console.log('🚀 File grande - upload e chunking lato server...');
+        setProgress(10);
+
+        const uploadResult = await edgeFunctionService.uploadForChunking(audioFile, language);
+        console.log(`✅ Upload completato. Job ID: ${uploadResult.jobId}, Chunk: ${uploadResult.totalChunks}`);
+
+        setProgress(20);
+
+        console.log('🔄 Avvio elaborazione...');
+        edgeFunctionService.startProcessing(uploadResult.jobId).catch(err => {
+          console.error('Errore elaborazione:', err);
+        });
+
+        const checkInterval = setInterval(async () => {
+          try {
+            const status = await edgeFunctionService.getJobStatus(uploadResult.jobId);
+            const percentComplete = (status.job.completed_chunks / status.job.total_chunks) * 70;
+            setProgress(20 + Math.round(percentComplete));
+
+            console.log(`📊 Progresso: ${status.job.completed_chunks}/${status.job.total_chunks} chunk`);
+
+            if (status.job.status === 'completed') {
+              clearInterval(checkInterval);
+              setProgress(100);
+
+              if (status.job.transcription_text) {
+                onTranscriptionResult(status.job.transcription_text);
+              }
+            } else if (status.job.status === 'failed') {
+              clearInterval(checkInterval);
+              throw new Error(status.job.error_message || 'Elaborazione fallita');
+            }
+          } catch (err: any) {
+            clearInterval(checkInterval);
+            throw err;
+          }
+        }, 2000);
+
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          if (progress < 100) {
+            setError('Timeout: elaborazione troppo lunga');
+            setIsTranscribing(false);
+          }
+        }, 600000);
       }
-
-      setProgress(100);
 
     } catch (err: any) {
       console.error('❌ Errore trascrizione:', err);
       setError(err.message);
     } finally {
-      setIsTranscribing(false);
-      setTimeout(() => setProgress(0), 3000);
+      if (progress === 100) {
+        setIsTranscribing(false);
+        setTimeout(() => setProgress(0), 3000);
+      }
     }
   };
 
@@ -213,13 +253,14 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           <p>✅ <strong>Sempre disponibile</strong> - infrastruttura Supabase</p>
           <p>✅ <strong>Zero configurazione</strong> - funziona subito</p>
           <p>✅ <strong>Sicuro</strong> - API key protette lato server</p>
-          <p>⚠️ <strong>Limite file: 25MB</strong></p>
+          <p>✅ <strong>File grandi supportati</strong> - chunking automatico</p>
         </div>
 
-        <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
-          <p className="text-sm text-orange-800">
-            <strong>File più grandi di 25MB?</strong><br/>
-            Usa la modalità <strong>"Browser (Chunking)"</strong> nel tab <strong>Trascrizione</strong>
+        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
+          <p className="text-sm text-green-800">
+            <strong>✨ Supporto file grandi!</strong><br/>
+            File fino a 25MB: trascrizione diretta<br/>
+            File oltre 25MB: chunking automatico lato server
           </p>
         </div>
       </div>
