@@ -31,6 +31,17 @@ class AIPostProcessingService {
     return this.openai !== null;
   }
 
+  private chunkText(text: string, maxWords: number = 2000): string[] {
+    const words = text.split(/\s+/);
+    const chunks: string[] = [];
+
+    for (let i = 0; i < words.length; i += maxWords) {
+      chunks.push(words.slice(i, i + maxWords).join(' '));
+    }
+
+    return chunks;
+  }
+
   async generateSummary(text: string, options: SummaryOptions = { style: 'concise' }): Promise<string> {
     if (!this.openai) {
       throw new Error('OpenAI non configurato. Inserisci la tua API key.');
@@ -48,17 +59,50 @@ Mantieni il tono professionale e obiettivo.
 Se il testo è in italiano, rispondi in italiano. Se è in inglese, rispondi in inglese.`;
 
     try {
-      const response = await this.openai.chat.completions.create({
+      const chunks = this.chunkText(text, 2000);
+
+      if (chunks.length === 1) {
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Crea una sintesi del seguente testo:\n\n${text}` }
+          ],
+          temperature: 0.3,
+          max_tokens: options.maxLength || 500
+        });
+
+        return response.choices[0].message.content || 'Errore nella generazione della sintesi';
+      }
+
+      const summaries: string[] = [];
+      for (const chunk of chunks) {
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'Crea una sintesi concisa dei punti chiave.' },
+            { role: 'user', content: chunk }
+          ],
+          temperature: 0.3,
+          max_tokens: 300
+        });
+
+        summaries.push(response.choices[0].message.content || '');
+      }
+
+      const combinedSummaries = summaries.join('\n\n');
+
+      const finalResponse = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Crea una sintesi del seguente testo:\n\n${text}` }
+          { role: 'user', content: `Crea una sintesi finale unificata da queste sintesi parziali:\n\n${combinedSummaries}` }
         ],
         temperature: 0.3,
         max_tokens: options.maxLength || 500
       });
 
-      return response.choices[0].message.content || 'Errore nella generazione della sintesi';
+      return finalResponse.choices[0].message.content || 'Errore nella generazione della sintesi';
     } catch (error) {
       console.error('Errore generazione sintesi:', error);
       throw new Error('Impossibile generare la sintesi');
@@ -87,11 +131,14 @@ Formatta la risposta come JSON array con questo formato:
 ]`;
 
     try {
+      const chunks = this.chunkText(text, 2500);
+      const textToProcess = chunks.length > 1 ? chunks[0] : text;
+
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Crea domande e risposte basate sul seguente testo:\n\n${text}` }
+          { role: 'user', content: `Crea domande e risposte basate sul seguente testo:\n\n${textToProcess}` }
         ],
         temperature: 0.5,
         max_tokens: 2000,

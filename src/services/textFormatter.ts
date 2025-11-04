@@ -30,9 +30,29 @@ class TextFormatter {
     return !!this.openaiApiKey;
   }
 
-  // Formattazione automatica con ChatGPT
+  private chunkText(text: string, maxChunkSize: number = 8000): string[] {
+    const chunks: string[] = [];
+    const paragraphs = text.split('\n\n');
+    let currentChunk = '';
+
+    for (const paragraph of paragraphs) {
+      if ((currentChunk + paragraph).length > maxChunkSize && currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = paragraph;
+      } else {
+        currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk.trim());
+    }
+
+    return chunks.length > 0 ? chunks : [text];
+  }
+
   async formatWithAI(
-    text: string, 
+    text: string,
     options: FormattingOptions = {
       addParagraphs: true,
       addTitles: true,
@@ -57,47 +77,55 @@ class TextFormatter {
     }
 
     try {
-      const prompt = this.buildFormattingPrompt(text, options);
-      console.log('📋 Prompt generato, lunghezza:', prompt.length);
-      
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: 'Sei un esperto editor di testi specializzato nella formattazione di trascrizioni audio. Il tuo compito è rendere i testi più leggibili e ben strutturati.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 4000
-        })
-      });
+      const chunks = this.chunkText(text, 8000);
+      console.log(`📦 Testo diviso in ${chunks.length} chunk(s)`);
 
-      console.log('🌐 Risposta OpenAI status:', response.status);
-      
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ Errore OpenAI:', error);
-        throw new Error(`Errore API OpenAI: ${error.error?.message || 'Errore sconosciuto'}`);
+      const formattedChunks: string[] = [];
+
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`🔄 Formattazione chunk ${i + 1}/${chunks.length}`);
+
+        const prompt = this.buildFormattingPrompt(chunks[i], options);
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: 'Sei un esperto editor di testi specializzato nella formattazione di trascrizioni audio. Il tuo compito è rendere i testi più leggibili e ben strutturati.'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.3,
+            max_tokens: 4000
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('❌ Errore OpenAI:', error);
+          throw new Error(`Errore API OpenAI: ${error.error?.message || 'Errore sconosciuto'}`);
+        }
+
+        const data = await response.json();
+        const formattedChunk = data.choices[0]?.message?.content || chunks[i];
+        formattedChunks.push(formattedChunk);
+
+        console.log(`✅ Chunk ${i + 1}/${chunks.length} formattato`);
       }
 
-      const data = await response.json();
-      console.log('📦 Dati ricevuti:', data);
-      
-      const formattedText = data.choices[0]?.message?.content || text;
-      console.log('✅ Testo formattato ricevuto, lunghezza:', formattedText.length);
+      const formattedText = formattedChunks.join('\n\n');
+      console.log('✅ Testo completo formattato, lunghezza:', formattedText.length);
 
-      // Analizza i miglioramenti apportati
       const improvements = this.analyzeImprovements(text, formattedText);
       const readabilityScore = this.calculateReadabilityScore(formattedText);
 
