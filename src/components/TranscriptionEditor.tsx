@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Download, Copy, RotateCcw, Sparkles, Languages, Users } from 'lucide-react';
+import { Save, Download, Copy, RotateCcw, Sparkles, Languages, Users, Zap } from 'lucide-react';
 import { TextFormattingPanel } from './TextFormattingPanel';
+import { PostProcessingDialog } from './PostProcessingDialog';
 import { textFormatter } from '../services/textFormatter';
 import { translationService } from '../services/translationService';
+import { aiPostProcessing } from '../services/aiPostProcessing';
 import { detectSpeakers, getSpeakerColor, type SpeakerSegment } from '../services/speakerDiarization';
 
 interface TranscriptionEditorProps {
@@ -27,13 +29,14 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [showSpeakerView, setShowSpeakerView] = useState(false);
   const [speakers, setSpeakers] = useState<SpeakerSegment[]>([]);
+  const [showPostProcessing, setShowPostProcessing] = useState(false);
 
-  // Inizializza il formatter e il traduttore con l'API key esistente
   useEffect(() => {
     const apiKey = localStorage.getItem('openai_api_key');
     if (apiKey) {
       textFormatter.setApiKey(apiKey);
       translationService.setApiKey(apiKey);
+      aiPostProcessing.setApiKey(apiKey);
     }
   }, []);
 
@@ -198,13 +201,22 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
       setLocalTranscription(translatedText);
       onTranscriptionChange(translatedText);
       setLastSaved(new Date());
-      setShowTranslateModal(false);
+      handleTranslationComplete();
     } catch (error) {
       console.error('Errore traduzione:', error);
       setTranslationError(error instanceof Error ? error.message : 'Errore durante la traduzione');
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  const handleTranslationComplete = () => {
+    setShowTranslateModal(false);
+    setTimeout(() => {
+      if (window.confirm('Traduzione completata! Vuoi generare una sintesi o Q&A del testo tradotto?')) {
+        setShowPostProcessing(true);
+      }
+    }, 500);
   };
 
   return (
@@ -262,6 +274,16 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
             <Languages className="w-4 h-4" />
             <span>Traduci</span>
           </button>
+
+          <button
+            onClick={() => setShowPostProcessing(true)}
+            disabled={!localTranscription.trim() || !aiPostProcessing.isConfigured()}
+            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1"
+            title="Sintesi e Q&A"
+          >
+            <Zap className="w-4 h-4" />
+            <span>Sintesi/Q&A</span>
+          </button>
           
           <button
             onClick={copyToClipboard}
@@ -318,6 +340,13 @@ export const TranscriptionEditor: React.FC<TranscriptionEditorProps> = ({
         onFormattedText={handleFormattedText}
         isVisible={showFormattingPanel}
         onClose={() => setShowFormattingPanel(false)}
+      />
+
+      {/* Post-Processing Dialog */}
+      <PostProcessingDialog
+        text={localTranscription}
+        isVisible={showPostProcessing}
+        onClose={() => setShowPostProcessing(false)}
       />
 
       {/* Translation Modal */}
