@@ -30,7 +30,7 @@ class TextFormatter {
     return !!this.openaiApiKey;
   }
 
-  private chunkText(text: string, maxChunkSize: number = 8000): string[] {
+  private chunkText(text: string, maxChunkSize: number = 5000): string[] {
     const chunks: string[] = [];
     const paragraphs = text.split('\n\n');
     let currentChunk = '';
@@ -77,7 +77,7 @@ class TextFormatter {
     }
 
     try {
-      const chunks = this.chunkText(text, 8000);
+      const chunks = this.chunkText(text, 5000);
       console.log(`📦 Testo diviso in ${chunks.length} chunk(s)`);
 
       const formattedChunks: string[] = [];
@@ -98,7 +98,7 @@ class TextFormatter {
             messages: [
               {
                 role: 'system',
-                content: 'Sei un esperto editor di testi specializzato nella formattazione di trascrizioni audio. Il tuo compito è rendere i testi più leggibili e ben strutturati.'
+                content: 'Sei un esperto editor di testi. Formatta il testo in modo leggibile con paragrafi e punteggiatura corretta.'
               },
               {
                 role: 'user',
@@ -106,7 +106,7 @@ class TextFormatter {
               }
             ],
             temperature: 0.3,
-            max_tokens: 4000
+            max_tokens: 3000
           })
         });
 
@@ -148,69 +148,17 @@ class TextFormatter {
     }
   }
 
-  // Costruisce il prompt per ChatGPT
   private buildFormattingPrompt(text: string, options: FormattingOptions): string {
-    let prompt = `Formatta questo testo trascritto da audio per renderlo più leggibile e professionale.
+    let instructions = 'Formatta questo testo: ';
 
-TESTO ORIGINALE:
-"""
-${text}
-"""
+    if (options.addParagraphs) instructions += 'dividi in paragrafi logici, ';
+    if (options.addTitles) instructions += 'aggiungi titoli (## e ###), ';
+    if (options.addSpeakers) instructions += 'identifica speaker (**Speaker 1:**), ';
+    if (options.addTimestamps) instructions += 'mantieni timestamp, ';
 
-ISTRUZIONI:
-`;
+    instructions += 'correggi punteggiatura e maiuscole, rimuovi ripetizioni. Mantieni tutto il contenuto originale.';
 
-    if (options.addParagraphs) {
-      prompt += `
-• PARAGRAFI: Dividi il testo in paragrafi logici basati su:
-  - Pause naturali nel parlato (già indicate da interruzioni di riga)
-  - Cambi di argomento o concetto
-  - Transizioni logiche nel discorso
-  - Respiri naturali e pause del parlante
-• Aggiungi spazi tra i paragrafi per migliorare la leggibilità
-`;
-    }
-
-    if (options.addTitles) {
-      prompt += `
-• TITOLI: Aggiungi titoli e sottotitoli appropriati usando ## per i titoli principali e ### per i sottotitoli
-• Identifica i temi principali e crea una struttura gerarchica
-`;
-    }
-
-    if (options.addSpeakers) {
-      prompt += `
-• SPEAKER: Se identifichi diversi parlanti, usa **Speaker 1:**, **Speaker 2:** etc.
-`;
-    }
-
-    if (options.addTimestamps) {
-      prompt += `
-• TIMESTAMP: Mantieni eventuali timestamp esistenti nel formato originale
-`;
-    }
-
-    prompt += `
-• PUNTEGGIATURA: Correggi e migliora la punteggiatura
-• MAIUSCOLE: Usa maiuscole appropriate per nomi propri e inizio frasi
-• RIPETIZIONI: Rimuovi ripetizioni eccessive e riempitivi ("ehm", "cioè", "allora", "quindi", etc.)
-• PAUSE NATURALI: Rispetta le pause naturali del parlato per creare paragrafi fluidi
-• FLUSSO LOGICO: Mantieni il flusso naturale del discorso raggruppando concetti correlati
-• FLUIDITÀ: Rendi il testo più fluido mantenendo il significato originale
-• LINGUA: Il testo è in ${options.language === 'it' ? 'italiano' : options.language === 'en' ? 'inglese' : options.language}
-
-IMPORTANTE:
-- Mantieni TUTTO il contenuto originale, non rimuovere informazioni
-- Non inventare contenuti che non ci sono
-- Mantieni lo stile e il tono originale
-- Se ci sono termini tecnici, mantienili
-- Usa le interruzioni di riga esistenti come indicatori di pause naturali
-- Crea paragrafi di lunghezza ragionevole (3-5 frasi)
-- Restituisci SOLO il testo formattato, senza commenti aggiuntivi
-
-TESTO FORMATTATO:`;
-
-    return prompt;
+    return `${instructions}\n\n${text}`;
   }
 
   // Analizza i miglioramenti apportati
