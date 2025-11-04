@@ -6,7 +6,6 @@ import { TranscriptionEditor } from './components/TranscriptionEditor';
 import { TranscriptionService } from './components/TranscriptionService';
 import { BackendTranscription } from './components/BackendTranscription';
 import { DeploymentGuide } from './components/DeploymentGuide';
-import { ProjectDownloader } from './components/ProjectDownloader';
 
 function App() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -14,7 +13,7 @@ function App() {
   const [transcription, setTranscription] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy' | 'download'>('backend');
+  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy'>('backend');
 
   const handleVideoProcessing = (processing: boolean) => {
     setIsProcessingVideo(processing);
@@ -82,21 +81,6 @@ function App() {
                     Elaborando video...
                   </div>
                 )}
-                
-                <button
-                  onClick={() => setActiveTab('download')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'download'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                  data-tab="download"
-                >
-                  <div className="flex items-center space-x-2">
-                    <FileText className="w-4 h-4" />
-                    <span>Download</span>
-                  </div>
-                </button>
                 
                 <button
                   onClick={() => setActiveTab('backend')}
@@ -189,21 +173,6 @@ function App() {
                       <span>Editor</span>
                     </div>
                   </button>
-
-                  <button
-                    onClick={() => setActiveTab('download')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'download'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                    data-tab="download"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4" />
-                      <span>Download Progetto</span>
-                    </div>
-                  </button>
                 </nav>
               </div>
             </div>
@@ -224,10 +193,6 @@ function App() {
                   onTranscriptionResult={handleTranscriptionResult}
                   currentTime={currentTime}
                 />
-              )}
-              
-              {activeTab === 'download' && (
-                <ProjectDownloader />
               )}
               
               {activeTab === 'backend' && (
