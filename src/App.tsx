@@ -3,9 +3,7 @@ import { FileText, Headphones, Settings, Server, Cloud } from 'lucide-react';
 import { FileUpload } from './components/FileUpload';
 import { AudioPlayer } from './components/AudioPlayer';
 import { TranscriptionEditor } from './components/TranscriptionEditor';
-import { TranscriptionService } from './components/TranscriptionService';
 import { BackendTranscription } from './components/BackendTranscription';
-import { DeploymentGuide } from './components/DeploymentGuide';
 
 function App() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -13,7 +11,7 @@ function App() {
   const [transcription, setTranscription] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [activeTab, setActiveTab] = useState<'transcribe' | 'services' | 'backend' | 'deploy'>('backend');
+  const [activeTab, setActiveTab] = useState<'transcribe' | 'backend'>('backend');
 
   const handleVideoProcessing = (processing: boolean) => {
     setIsProcessingVideo(processing);
@@ -81,36 +79,6 @@ function App() {
                     Elaborando video...
                   </div>
                 )}
-                
-                <button
-                  onClick={() => setActiveTab('backend')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'backend'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                  data-tab="backend"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Server className="w-4 h-4" />
-                    <span>Cloud</span>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => setActiveTab('deploy')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'deploy'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                  data-tab="deploy"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Cloud className="w-4 h-4" />
-                    <span>Deploy</span>
-                  </div>
-                </button>
               </div>
             </div>
           </div>
@@ -187,14 +155,6 @@ function App() {
                 />
               )}
               
-              {activeTab === 'services' && (
-                <TranscriptionService
-                  audioFile={audioFile}
-                  onTranscriptionResult={handleTranscriptionResult}
-                  currentTime={currentTime}
-                />
-              )}
-              
               {activeTab === 'backend' && (
                 <>
                   {console.log('[App] Rendering BackendTranscription with audioFile:', audioFile ? audioFile.name : 'NULL')}
@@ -204,10 +164,6 @@ function App() {
                     onShowEditor={() => setActiveTab('transcribe')}
                   />
                 </>
-              )}
-              
-              {activeTab === 'deploy' && (
-                <DeploymentGuide />
               )}
             </div>
           </div>
