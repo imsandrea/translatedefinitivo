@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -20,7 +22,29 @@ export interface UploadProgress {
 
 export class SupabaseStorageService {
   private readonly BUCKET_NAME = 'audio-files';
-  private readonly CHUNK_SIZE_MB = 5;
+  private readonly CHUNK_DURATION_SECONDS = 300;
+  private ffmpeg: FFmpeg | null = null;
+
+  private async loadFFmpeg(onProgress: (progress: UploadProgress) => void): Promise<FFmpeg> {
+    if (this.ffmpeg) return this.ffmpeg;
+
+    onProgress({
+      stage: 'uploading',
+      progress: 0,
+      message: 'Caricamento FFmpeg...',
+    });
+
+    this.ffmpeg = new FFmpeg();
+
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+
+    await this.ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+
+    return this.ffmpeg;
+  }
 
   async uploadAndChunkAudio(
     file: File,
@@ -28,33 +52,28 @@ export class SupabaseStorageService {
   ): Promise<{ jobId: string; chunks: string[] }> {
     try {
       const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const fileName = `${jobId}/${file.name}`;
+
+      const ffmpeg = await this.loadFFmpeg(onProgress);
 
       onProgress({
         stage: 'uploading',
+        progress: 30,
+        message: 'Preparazione file audio...',
+      });
+
+      const inputFileName = 'input.' + (file.name.split('.').pop() || 'mp3');
+      await ffmpeg.writeFile(inputFileName, await fetchFile(file));
+
+      onProgress({
+        stage: 'chunking',
         progress: 0,
-        message: `Caricamento file: ${file.name}...`,
+        message: 'Analisi durata audio...',
       });
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+      await ffmpeg.exec(['-i', inputFileName, '-f', 'null', '-']);
 
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      onProgress({
-        stage: 'uploading',
-        progress: 100,
-        message: 'File caricato con successo!',
-      });
-
-      const chunkSizeBytes = this.CHUNK_SIZE_MB * 1024 * 1024;
-      const totalChunks = Math.ceil(file.size / chunkSizeBytes);
+      const duration = await this.getAudioDuration(ffmpeg, inputFileName);
+      const totalChunks = Math.ceil(duration / this.CHUNK_DURATION_SECONDS);
 
       onProgress({
         stage: 'chunking',
@@ -65,15 +84,23 @@ export class SupabaseStorageService {
 
       const chunkPaths: string[] = [];
 
-      // Extract original file extension
-      const fileExtension = file.name.split('.').pop() || 'mp3';
-
       for (let i = 0; i < totalChunks; i++) {
-        const start = i * chunkSizeBytes;
-        const end = Math.min(start + chunkSizeBytes, file.size);
-        const chunkBlob = file.slice(start, end, file.type);
+        const startTime = i * this.CHUNK_DURATION_SECONDS;
+        const outputFileName = `chunk-${i}.mp3`;
 
-        const chunkFileName = `${jobId}/chunk-${i}.${fileExtension}`;
+        await ffmpeg.exec([
+          '-i', inputFileName,
+          '-ss', startTime.toString(),
+          '-t', this.CHUNK_DURATION_SECONDS.toString(),
+          '-acodec', 'libmp3lame',
+          '-b:a', '128k',
+          outputFileName
+        ]);
+
+        const data = await ffmpeg.readFile(outputFileName);
+        const chunkBlob = new Blob([data], { type: 'audio/mpeg' });
+
+        const chunkFileName = `${jobId}/chunk-${i}.mp3`;
 
         const { error: chunkError } = await supabase.storage
           .from(this.BUCKET_NAME)
@@ -92,7 +119,7 @@ export class SupabaseStorageService {
         onProgress({
           stage: 'chunking',
           progress,
-          message: `Chunk ${i + 1}/${totalChunks} caricato`,
+          message: `Chunk ${i + 1}/${totalChunks} processato`,
           currentChunk: i + 1,
           totalChunks,
         });
@@ -108,6 +135,24 @@ export class SupabaseStorageService {
       });
       throw error;
     }
+  }
+
+  private async getAudioDuration(ffmpeg: FFmpeg, fileName: string): Promise<number> {
+    let duration = 0;
+
+    ffmpeg.on('log', ({ message }) => {
+      const match = message.match(/Duration: (\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        const hours = parseInt(match[1]);
+        const minutes = parseInt(match[2]);
+        const seconds = parseInt(match[3]);
+        duration = hours * 3600 + minutes * 60 + seconds;
+      }
+    });
+
+    await ffmpeg.exec(['-i', fileName, '-f', 'null', '-']);
+
+    return duration || 300;
   }
 
   async getChunkUrl(chunkPath: string): Promise<string> {
