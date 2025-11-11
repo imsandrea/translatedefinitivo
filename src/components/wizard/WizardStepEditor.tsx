@@ -181,12 +181,13 @@ export function WizardStepEditor({
           <h3 className="font-semibold text-gray-900 mb-3">
             Traduci in un'altra lingua
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
               { code: 'en', name: 'Inglese', flag: '🇬🇧' },
               { code: 'es', name: 'Spagnolo', flag: '🇪🇸' },
               { code: 'fr', name: 'Francese', flag: '🇫🇷' },
               { code: 'de', name: 'Tedesco', flag: '🇩🇪' },
+              { code: 'pt', name: 'Portoghese', flag: '🇵🇹' },
             ].map((lang) => (
               <button
                 key={lang.code}

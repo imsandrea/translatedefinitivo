@@ -20,6 +20,7 @@ export function WizardStepConfig({ session, onUpdate, onNext, onBack }: WizardSt
     { code: 'es', name: 'Español', flag: '🇪🇸' },
     { code: 'fr', name: 'Français', flag: '🇫🇷' },
     { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+    { code: 'pt', name: 'Português', flag: '🇵🇹' },
   ];
 
   const audioTypes = [
@@ -88,7 +89,7 @@ export function WizardStepConfig({ session, onUpdate, onNext, onBack }: WizardSt
             <Globe className="w-4 h-4 inline mr-2" />
             Lingua dell'audio
           </label>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {languages.map((lang) => (
               <button
                 key={lang.code}
