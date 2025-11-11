@@ -28,40 +28,73 @@ export class SupabaseStorageService {
   ): Promise<{ jobId: string; chunks: string[] }> {
     try {
       const jobId = `job_${Date.now()}`;
+      const fileSizeMB = file.size / (1024 * 1024);
+
+      if (fileSizeMB <= 24) {
+        onProgress({
+          stage: 'uploading',
+          progress: 20,
+          message: 'File piccolo, caricamento diretto...',
+        });
+
+        const fileExtension = file.name.split('.').pop() || 'mp3';
+        const chunkPath = `${jobId}/chunk_000.${fileExtension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(this.BUCKET_NAME)
+          .upload(chunkPath, file, {
+            contentType: file.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Errore upload: ${uploadError.message}`);
+        }
+
+        onProgress({
+          stage: 'completed',
+          progress: 100,
+          message: 'File caricato con successo!',
+          totalChunks: 1,
+        });
+
+        return {
+          jobId,
+          chunks: [chunkPath],
+        };
+      }
 
       onProgress({
         stage: 'chunking',
         progress: 10,
-        message: 'Analizzando e dividendo il file audio...',
+        message: 'File grande, dividendo in parti...',
       });
 
-      const chunks = await audioChunker.chunkAudioFile(file, 5, (chunkProgress) => {
-        onProgress({
-          stage: 'chunking',
-          progress: 10 + (chunkProgress.percentage * 0.4),
-          message: chunkProgress.message,
-          currentChunk: chunkProgress.currentChunk,
-          totalChunks: chunkProgress.totalChunks,
-        });
-      });
+      const analysis = await audioChunker.analyzeAudioFile(file);
+      const totalChunks = analysis.estimatedChunks;
+      const chunkSizeBytes = Math.floor(file.size / totalChunks);
+      const fileExtension = file.name.split('.').pop() || 'mp3';
 
       onProgress({
         stage: 'uploading',
-        progress: 50,
-        message: `Caricamento di ${chunks.length} chunk su Supabase Storage...`,
-        totalChunks: chunks.length,
+        progress: 20,
+        message: `Caricamento di ${totalChunks} parti...`,
+        totalChunks,
       });
 
       const chunkPaths: string[] = [];
 
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const chunkPath = `${jobId}/chunk_${i.toString().padStart(3, '0')}.wav`;
+      for (let i = 0; i < totalChunks; i++) {
+        const startByte = i * chunkSizeBytes;
+        const endByte = i === totalChunks - 1 ? file.size : (i + 1) * chunkSizeBytes;
+        const chunkBlob = file.slice(startByte, endByte, file.type);
+
+        const chunkPath = `${jobId}/chunk_${i.toString().padStart(3, '0')}.${fileExtension}`;
 
         const { error: uploadError } = await supabase.storage
           .from(this.BUCKET_NAME)
-          .upload(chunkPath, chunk.blob, {
-            contentType: 'audio/wav',
+          .upload(chunkPath, chunkBlob, {
+            contentType: file.type,
             upsert: false,
           });
 
@@ -73,18 +106,18 @@ export class SupabaseStorageService {
 
         onProgress({
           stage: 'uploading',
-          progress: 50 + ((i + 1) / chunks.length) * 50,
-          message: `Caricato chunk ${i + 1}/${chunks.length}`,
+          progress: 20 + ((i + 1) / totalChunks) * 80,
+          message: `Caricato chunk ${i + 1}/${totalChunks}`,
           currentChunk: i + 1,
-          totalChunks: chunks.length,
+          totalChunks,
         });
       }
 
       onProgress({
         stage: 'completed',
         progress: 100,
-        message: `${chunks.length} chunk caricati con successo!`,
-        totalChunks: chunks.length,
+        message: `${totalChunks} chunk caricati con successo!`,
+        totalChunks,
       });
 
       return {
@@ -95,7 +128,7 @@ export class SupabaseStorageService {
       onProgress({
         stage: 'error',
         progress: 0,
-        message: 'Errore durante il chunking e caricamento',
+        message: 'Errore durante il caricamento',
         error: error.message,
       });
       throw error;
