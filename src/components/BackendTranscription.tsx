@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Server, Upload, Zap, AlertCircle, CheckCircle, Clock, HardDrive, Video, Music, Rocket, Cloud } from 'lucide-react';
 import { edgeFunctionService } from '../services/edgeFunctionService';
+import { chunkedTranscriptionService } from '../services/chunkedTranscriptionService';
+import { TranscriptionProgressModal } from './TranscriptionProgressModal';
+import type { UploadProgress } from '../services/supabaseStorageService';
 
 interface BackendTranscriptionProps {
   audioFile: File | null;
@@ -20,6 +23,12 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
   const [language, setLanguage] = useState('it');
   const [conversationType, setConversationType] = useState<'meeting' | 'interview' | 'lecture' | 'other'>('meeting');
   const [transcriptionCompleted, setTranscriptionCompleted] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
+    stage: 'uploading',
+    progress: 0,
+    message: 'Inizializzazione...',
+  });
 
   React.useEffect(() => {
     checkServerStatus();
@@ -126,6 +135,51 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
       setError(err.message);
       setIsTranscribing(false);
       setProgress(0);
+    }
+  };
+
+  const startStorageTranscription = async () => {
+    if (!audioFile) {
+      return;
+    }
+
+    const openaiApiKey = localStorage.getItem('openai_api_key');
+    if (!openaiApiKey) {
+      setError('API Key OpenAI non configurata');
+      return;
+    }
+
+    setShowProgressModal(true);
+    setIsTranscribing(true);
+    setError(null);
+
+    try {
+      const transcription = await chunkedTranscriptionService.transcribeFile(
+        audioFile,
+        language,
+        openaiApiKey,
+        (progress) => {
+          setUploadProgress(progress);
+        }
+      );
+
+      onTranscriptionResult(transcription);
+      setTranscriptionCompleted(true);
+
+      setTimeout(() => {
+        setShowProgressModal(false);
+        setIsTranscribing(false);
+      }, 2000);
+    } catch (err: any) {
+      console.error('Errore trascrizione storage:', err);
+      setUploadProgress({
+        stage: 'error',
+        progress: 0,
+        message: 'Errore durante la trascrizione',
+        error: err.message,
+      });
+      setError(err.message);
+      setIsTranscribing(false);
     }
   };
 
@@ -239,21 +293,37 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
         </p>
       </div>
 
-      {/* Smart Transcription Button */}
+      {/* Transcription Buttons */}
       {audioFile && (
-        <button
-          onClick={startSmartTranscription}
-          disabled={isTranscribing}
-          className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
-        >
-          <Cloud className="w-6 h-6" />
-          <span className="text-lg">
-            {isTranscribing
-              ? 'Trascrizione Cloud in corso...'
-              : 'Avvia Trascrizione Cloud'
-            }
-          </span>
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={startStorageTranscription}
+            disabled={isTranscribing}
+            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
+          >
+            <Upload className="w-6 h-6" />
+            <span className="text-lg">
+              {isTranscribing
+                ? 'Trascrizione in corso...'
+                : 'Trascrizione con Storage (Consigliato)'
+              }
+            </span>
+          </button>
+
+          <button
+            onClick={startSmartTranscription}
+            disabled={isTranscribing}
+            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-4 rounded-lg transition-all flex items-center justify-center space-x-3 shadow-lg font-semibold"
+          >
+            <Cloud className="w-6 h-6" />
+            <span className="text-lg">
+              {isTranscribing
+                ? 'Trascrizione Cloud in corso...'
+                : 'Trascrizione Cloud (Database)'
+              }
+            </span>
+          </button>
+        </div>
       )}
 
       {progress > 0 && (
@@ -322,6 +392,17 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           </p>
         </div>
       </div>
+
+      <TranscriptionProgressModal
+        isOpen={showProgressModal}
+        progress={uploadProgress}
+        onClose={() => {
+          setShowProgressModal(false);
+          if (uploadProgress.stage === 'completed') {
+            onShowEditor?.();
+          }
+        }}
+      />
     </div>
   );
 };

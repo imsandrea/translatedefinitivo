@@ -35,6 +35,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@supabase/supabase-js": "^2.81.1",
     "lucide-react": "^0.344.0",
     "openai": "^5.20.2",
     "react": "^18.3.1",
