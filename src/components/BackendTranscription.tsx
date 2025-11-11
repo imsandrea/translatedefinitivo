@@ -29,6 +29,7 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
     progress: 0,
     message: 'Inizializzazione...',
   });
+  const [forceChunking, setForceChunking] = useState(false);
 
   React.useEffect(() => {
     checkServerStatus();
@@ -160,7 +161,8 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
         openaiApiKey,
         (progress) => {
           setUploadProgress(progress);
-        }
+        },
+        forceChunking
       );
 
       onTranscriptionResult(transcription);
@@ -270,6 +272,22 @@ export const BackendTranscription: React.FC<BackendTranscriptionProps> = ({
           <option value="de">🇩🇪 Tedesco</option>
           <option value="pt">🇵🇹 Portoghese</option>
         </select>
+      </div>
+
+      {/* Force Chunking Option */}
+      <div className="mb-4">
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={forceChunking}
+            onChange={(e) => setForceChunking(e.target.checked)}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+            disabled={isTranscribing}
+          />
+          <span className="text-sm text-gray-700">
+            Forza chunking (per test, anche su file piccoli)
+          </span>
+        </label>
       </div>
 
       {/* Conversation Type Selection */}

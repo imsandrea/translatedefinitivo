@@ -8,11 +8,13 @@ export class ChunkedTranscriptionService {
     file: File,
     language: string,
     openaiApiKey: string,
-    onProgress: (progress: UploadProgress) => void
+    onProgress: (progress: UploadProgress) => void,
+    forceChunking: boolean = false
   ): Promise<string> {
     const { jobId, chunks } = await supabaseStorageService.uploadAndChunkAudio(
       file,
-      onProgress
+      onProgress,
+      forceChunking
     );
 
     try {

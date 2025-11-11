@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, FileText, MessageSquare, Download, Copy, Sparkles } from 'lucide-react';
+import { X, FileText, MessageSquare, Download, Copy, Sparkles, Languages } from 'lucide-react';
 import { aiPostProcessing, type SummaryOptions, type QAOptions } from '../services/aiPostProcessing';
+import { translationService } from '../services/translationService';
 
 interface PostProcessingDialogProps {
   text: string;
@@ -13,7 +14,7 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
   isVisible,
   onClose
 }) => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'qa' | 'formatting'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'qa' | 'formatting' | 'translation'>('summary');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<string>('');
   const [qaResult, setQAResult] = useState<Array<{ question: string; answer: string }>>([]);
@@ -26,6 +27,9 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
   const [identifySpeakers, setIdentifySpeakers] = useState(false);
   const [addFormatting, setAddFormatting] = useState(false);
   const [formattedText, setFormattedText] = useState<string>('');
+
+  const [targetLanguage, setTargetLanguage] = useState<string>('it');
+  const [translatedText, setTranslatedText] = useState<string>('');
 
   const handleGenerateSummary = async () => {
     setIsProcessing(true);
@@ -84,6 +88,24 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
     }
   };
 
+  const handleTranslate = async () => {
+    setIsProcessing(true);
+    setError(null);
+    setTranslatedText('');
+
+    try {
+      const translated = await translationService.translateText(text, {
+        targetLanguage,
+        sourceLanguage: 'auto'
+      });
+      setTranslatedText(translated);
+    } catch (err: any) {
+      setError(err.message || 'Errore durante la traduzione');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const downloadResult = () => {
     let content = '';
     let filename = '';
@@ -96,9 +118,12 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
         `${index + 1}. ${qa.question}\n\n${qa.answer}\n\n`
       ).join('---\n\n');
       filename = `qa_${new Date().toISOString().slice(0, 10)}.txt`;
-    } else {
+    } else if (activeTab === 'formatting') {
       content = formattedText;
       filename = `formattato_${new Date().toISOString().slice(0, 10)}.txt`;
+    } else {
+      content = translatedText;
+      filename = `tradotto_${new Date().toISOString().slice(0, 10)}.txt`;
     }
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -121,8 +146,10 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
       content = qaResult.map((qa, index) =>
         `${index + 1}. ${qa.question}\n\n${qa.answer}\n\n`
       ).join('---\n\n');
-    } else {
+    } else if (activeTab === 'formatting') {
       content = formattedText;
+    } else {
+      content = translatedText;
     }
 
     navigator.clipboard.writeText(content);
@@ -130,7 +157,7 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
 
   if (!isVisible) return null;
 
-  const hasResult = (activeTab === 'summary' && result) || (activeTab === 'qa' && qaResult.length > 0) || (activeTab === 'formatting' && formattedText);
+  const hasResult = (activeTab === 'summary' && result) || (activeTab === 'qa' && qaResult.length > 0) || (activeTab === 'formatting' && formattedText) || (activeTab === 'translation' && translatedText);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -180,6 +207,17 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
           >
             <Sparkles className="w-4 h-4 inline-block mr-2" />
             Formattazione
+          </button>
+          <button
+            onClick={() => setActiveTab('translation')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'translation'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Languages className="w-4 h-4 inline-block mr-2" />
+            Traduzione
           </button>
         </div>
 
@@ -403,6 +441,74 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
                   <div className="text-gray-700 leading-relaxed whitespace-pre-wrap"
                        dangerouslySetInnerHTML={{ __html: formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
                   />
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'translation' ? (
+            <div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lingua di destinazione
+                </label>
+                <select
+                  value={targetLanguage}
+                  onChange={(e) => setTargetLanguage(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  disabled={isProcessing}
+                >
+                  <option value="it">Italiano</option>
+                  <option value="en">Inglese</option>
+                  <option value="es">Spagnolo</option>
+                  <option value="fr">Francese</option>
+                  <option value="de">Tedesco</option>
+                  <option value="pt">Portoghese</option>
+                  <option value="ru">Russo</option>
+                  <option value="zh">Cinese</option>
+                  <option value="ja">Giapponese</option>
+                  <option value="ko">Coreano</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleTranslate}
+                disabled={isProcessing || !translationService.isConfigured()}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    <span>Traduzione in corso...</span>
+                  </>
+                ) : (
+                  <>
+                    <Languages className="w-5 h-5" />
+                    <span>Traduci Testo</span>
+                  </>
+                )}
+              </button>
+
+              {translatedText && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-semibold text-gray-800">Testo tradotto</h4>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={copyResult}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                        title="Copia"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={downloadResult}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                        title="Scarica"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{translatedText}</p>
                 </div>
               )}
             </div>

@@ -24,13 +24,14 @@ export class SupabaseStorageService {
 
   async uploadAndChunkAudio(
     file: File,
-    onProgress: (progress: UploadProgress) => void
+    onProgress: (progress: UploadProgress) => void,
+    forceChunking: boolean = false
   ): Promise<{ jobId: string; chunks: string[] }> {
     try {
       const jobId = `job_${Date.now()}`;
       const fileSizeMB = file.size / (1024 * 1024);
 
-      if (fileSizeMB <= 24) {
+      if (fileSizeMB <= 24 && !forceChunking) {
         onProgress({
           stage: 'uploading',
           progress: 20,
