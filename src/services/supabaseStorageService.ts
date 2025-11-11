@@ -65,12 +65,15 @@ export class SupabaseStorageService {
 
       const chunkPaths: string[] = [];
 
+      // Extract original file extension
+      const fileExtension = file.name.split('.').pop() || 'mp3';
+
       for (let i = 0; i < totalChunks; i++) {
         const start = i * chunkSizeBytes;
         const end = Math.min(start + chunkSizeBytes, file.size);
-        const chunkBlob = file.slice(start, end);
+        const chunkBlob = file.slice(start, end, file.type);
 
-        const chunkFileName = `${jobId}/chunk-${i}.mp3`;
+        const chunkFileName = `${jobId}/chunk-${i}.${fileExtension}`;
 
         const { error: chunkError } = await supabase.storage
           .from(this.BUCKET_NAME)

@@ -53,8 +53,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Extract filename from chunkPath to preserve extension
+    const fileName = chunkPath.split('/').pop() || 'audio.mp3';
+
     const formData = new FormData();
-    formData.append("file", fileData, "audio.mp3");
+    formData.append("file", fileData, fileName);
     formData.append("model", "whisper-1");
     formData.append("language", language);
     formData.append("response_format", "verbose_json");
