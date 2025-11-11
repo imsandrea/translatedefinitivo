@@ -215,6 +215,51 @@ ${instructions}`
       throw new Error('Impossibile migliorare il testo');
     }
   }
+
+  async formatText(text: string, options: { identifySpeakers: boolean; addFormatting: boolean }): Promise<string> {
+    if (!this.openai) {
+      throw new Error('OpenAI non configurato. Inserisci la tua API key.');
+    }
+
+    let instructions = 'Formatta il testo migliorandone la leggibilita.\n';
+
+    if (options.identifySpeakers) {
+      instructions += 'Identifica e distingui chiaramente i diversi interlocutori. Usa etichette come "Interlocutore A:", "Interlocutore B:", ecc., oppure "Persona 1:", "Persona 2:" se riesci a capire chi sono.\n';
+    }
+
+    if (options.addFormatting) {
+      instructions += 'Aggiungi grassetti (**testo**) per i concetti chiave e importanti. Organizza il testo in paragrafi ben strutturati.\n';
+    }
+
+    instructions += 'Mantieni il contenuto originale senza modificare le parole pronunciate. Non inventare o aggiungere informazioni.';
+
+    try {
+      const chunks = this.chunkText(text, 3000);
+      const formattedChunks: string[] = [];
+
+      for (const chunk of chunks) {
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: instructions
+            },
+            { role: 'user', content: chunk }
+          ],
+          temperature: 0.2,
+          max_tokens: 4000
+        });
+
+        formattedChunks.push(response.choices[0].message.content || chunk);
+      }
+
+      return formattedChunks.join('\n\n');
+    } catch (error) {
+      console.error('Errore formattazione testo:', error);
+      throw new Error('Impossibile formattare il testo');
+    }
+  }
 }
 
 export const aiPostProcessing = new AIPostProcessingService();

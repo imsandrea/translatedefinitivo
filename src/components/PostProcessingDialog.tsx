@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, MessageSquare, Download, Copy } from 'lucide-react';
+import { X, FileText, MessageSquare, Download, Copy, Sparkles } from 'lucide-react';
 import { aiPostProcessing, type SummaryOptions, type QAOptions } from '../services/aiPostProcessing';
 
 interface PostProcessingDialogProps {
@@ -13,7 +13,7 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
   isVisible,
   onClose
 }) => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'qa'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'qa' | 'formatting'>('summary');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<string>('');
   const [qaResult, setQAResult] = useState<Array<{ question: string; answer: string }>>([]);
@@ -22,6 +22,10 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
   const [summaryStyle, setSummaryStyle] = useState<'concise' | 'detailed' | 'bullet-points'>('concise');
   const [qaStyle, setQAStyle] = useState<'simple' | 'detailed' | 'technical'>('simple');
   const [numberOfQuestions, setNumberOfQuestions] = useState(5);
+
+  const [identifySpeakers, setIdentifySpeakers] = useState(false);
+  const [addFormatting, setAddFormatting] = useState(false);
+  const [formattedText, setFormattedText] = useState<string>('');
 
   const handleGenerateSummary = async () => {
     setIsProcessing(true);
@@ -62,6 +66,24 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
     }
   };
 
+  const handleFormatText = async () => {
+    setIsProcessing(true);
+    setError(null);
+    setFormattedText('');
+
+    try {
+      const formatted = await aiPostProcessing.formatText(text, {
+        identifySpeakers,
+        addFormatting
+      });
+      setFormattedText(formatted);
+    } catch (err: any) {
+      setError(err.message || 'Errore durante la formattazione');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const downloadResult = () => {
     let content = '';
     let filename = '';
@@ -69,11 +91,14 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
     if (activeTab === 'summary') {
       content = result;
       filename = `sintesi_${new Date().toISOString().slice(0, 10)}.txt`;
-    } else {
+    } else if (activeTab === 'qa') {
       content = qaResult.map((qa, index) =>
         `${index + 1}. ${qa.question}\n\n${qa.answer}\n\n`
       ).join('---\n\n');
       filename = `qa_${new Date().toISOString().slice(0, 10)}.txt`;
+    } else {
+      content = formattedText;
+      filename = `formattato_${new Date().toISOString().slice(0, 10)}.txt`;
     }
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -92,10 +117,12 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
 
     if (activeTab === 'summary') {
       content = result;
-    } else {
+    } else if (activeTab === 'qa') {
       content = qaResult.map((qa, index) =>
         `${index + 1}. ${qa.question}\n\n${qa.answer}\n\n`
       ).join('---\n\n');
+    } else {
+      content = formattedText;
     }
 
     navigator.clipboard.writeText(content);
@@ -103,7 +130,7 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
 
   if (!isVisible) return null;
 
-  const hasResult = (activeTab === 'summary' && result) || (activeTab === 'qa' && qaResult.length > 0);
+  const hasResult = (activeTab === 'summary' && result) || (activeTab === 'qa' && qaResult.length > 0) || (activeTab === 'formatting' && formattedText);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -142,6 +169,17 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
           >
             <MessageSquare className="w-4 h-4 inline-block mr-2" />
             Q&A
+          </button>
+          <button
+            onClick={() => setActiveTab('formatting')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'formatting'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 inline-block mr-2" />
+            Formattazione
           </button>
         </div>
 
@@ -293,7 +331,82 @@ export const PostProcessingDialog: React.FC<PostProcessingDialogProps> = ({
                 </div>
               )}
             </div>
-          )}
+          ) : activeTab === 'formatting' ? (
+            <div>
+              <div className="mb-4 space-y-4">
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={identifySpeakers}
+                    onChange={(e) => setIdentifySpeakers(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    disabled={isProcessing}
+                  />
+                  <span className="text-gray-700">
+                    Identifica e distingui gli interlocutori
+                  </span>
+                </label>
+
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={addFormatting}
+                    onChange={(e) => setAddFormatting(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    disabled={isProcessing}
+                  />
+                  <span className="text-gray-700">
+                    Aggiungi grassetti e formattazione per migliorare la leggibilita
+                  </span>
+                </label>
+              </div>
+
+              <button
+                onClick={handleFormatText}
+                disabled={isProcessing || !aiPostProcessing.isConfigured()}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    <span>Formattazione in corso...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    <span>Formatta Testo</span>
+                  </>
+                )}
+              </button>
+
+              {formattedText && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-semibold text-gray-800">Testo formattato</h4>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={copyResult}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                        title="Copia"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={downloadResult}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                        title="Scarica"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-gray-700 leading-relaxed whitespace-pre-wrap"
+                       dangerouslySetInnerHTML={{ __html: formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {error && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
