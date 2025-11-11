@@ -70,8 +70,6 @@ export class SupabaseStorageService {
         message: 'Analisi durata audio...',
       });
 
-      await ffmpeg.exec(['-i', inputFileName, '-f', 'null', '-']);
-
       const duration = await this.getAudioDuration(ffmpeg, inputFileName);
       const totalChunks = Math.ceil(duration / this.CHUNK_DURATION_SECONDS);
 
@@ -138,21 +136,25 @@ export class SupabaseStorageService {
   }
 
   private async getAudioDuration(ffmpeg: FFmpeg, fileName: string): Promise<number> {
-    let duration = 0;
+    return new Promise((resolve) => {
+      let duration = 0;
 
-    ffmpeg.on('log', ({ message }) => {
-      const match = message.match(/Duration: (\d{2}):(\d{2}):(\d{2})/);
-      if (match) {
-        const hours = parseInt(match[1]);
-        const minutes = parseInt(match[2]);
-        const seconds = parseInt(match[3]);
-        duration = hours * 3600 + minutes * 60 + seconds;
-      }
+      ffmpeg.on('log', ({ message }) => {
+        const match = message.match(/Duration: (\d{2}):(\d{2}):(\d{2})\.\d+/);
+        if (match) {
+          const hours = parseInt(match[1]);
+          const minutes = parseInt(match[2]);
+          const seconds = parseInt(match[3]);
+          duration = hours * 3600 + minutes * 60 + seconds;
+        }
+      });
+
+      ffmpeg.exec(['-i', fileName]).then(() => {
+        resolve(duration || 300);
+      }).catch(() => {
+        resolve(300);
+      });
     });
-
-    await ffmpeg.exec(['-i', fileName, '-f', 'null', '-']);
-
-    return duration || 300;
   }
 
   async getChunkUrl(chunkPath: string): Promise<string> {
