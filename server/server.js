@@ -43,11 +43,13 @@ const loadRoutes = async () => {
   const chunkedTranscriptionRoutes = await import('./routes/chunkedTranscription.js');
   const smartTranscriptionRoutes = await import('./routes/smartTranscription.js');
   const uploadAndChunkRoutes = await import('./routes/uploadAndChunk.js');
+  const supabaseChunkingRoutes = await import('./routes/supabaseChunking.js');
 
   // Routes
   app.use('/api/transcription', transcriptionRoutes.default);
   app.use('/api/chunked', chunkedTranscriptionRoutes.default);
   app.use('/api/smart', smartTranscriptionRoutes.default);
+  app.use('/api/supabase', supabaseChunkingRoutes.default);
   app.use('/api/upload', uploadAndChunkRoutes.default);
 
   // Error handling middleware
