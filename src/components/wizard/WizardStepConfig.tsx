@@ -4,6 +4,7 @@ interface AudioSession {
   file: File;
   language: string;
   audioType: 'meeting' | 'interview' | 'lecture' | 'conversation' | 'presentation';
+  forceChunking?: boolean;
 }
 
 interface WizardStepConfigProps {
@@ -156,6 +157,25 @@ export function WizardStepConfig({ session, onUpdate, onNext, onBack }: WizardSt
           <li>Formattare il testo in modo appropriato</li>
           <li>Applicare le ottimizzazioni giuste per il contesto</li>
         </ul>
+      </div>
+
+      <div className="border-t pt-4 mt-4">
+        <label className="flex items-center space-x-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={session.forceChunking || false}
+            onChange={(e) => onUpdate({ forceChunking: e.target.checked })}
+            className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+          />
+          <div>
+            <span className="text-sm font-medium text-gray-700">
+              Forza chunking (per test)
+            </span>
+            <p className="text-xs text-gray-500">
+              Abilita il chunking anche per file piccoli, utile per testare il sistema
+            </p>
+          </div>
+        </label>
       </div>
 
       <div className="flex justify-between pt-4">

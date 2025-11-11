@@ -7,6 +7,7 @@ interface AudioSession {
   file: File;
   language: string;
   audioType: string;
+  forceChunking?: boolean;
 }
 
 interface WizardStepTranscribeProps {
@@ -45,7 +46,8 @@ export function WizardStepTranscribe({
         openaiApiKey,
         (progressUpdate) => {
           setProgress(progressUpdate);
-        }
+        },
+        session.forceChunking || false
       );
 
       onTranscriptionComplete(transcription);
