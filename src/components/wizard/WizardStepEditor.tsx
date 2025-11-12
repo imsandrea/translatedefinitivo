@@ -3,6 +3,7 @@ import { Download, Sparkles, Languages, FileText, RotateCcw, Copy, Check } from 
 import { textFormatter } from '../../services/textFormatter';
 import { aiPostProcessing } from '../../services/aiPostProcessing';
 import { translationService } from '../../services/translationService';
+import { getApiKey } from '../../services/configService';
 
 interface WizardStepEditorProps {
   transcription: string;
@@ -25,9 +26,9 @@ export function WizardStepEditor({
   const [activeTab, setActiveTab] = useState<'format' | 'translate' | 'summary'>('format');
 
   const handleFormat = async () => {
-    const apiKey = localStorage.getItem('openai_api_key');
+    const apiKey = await getApiKey();
     if (!apiKey) {
-      alert('Configura la API Key OpenAI nelle impostazioni');
+      alert('API Key OpenAI non configurata nel database. Contatta l\'amministratore.');
       return;
     }
 
@@ -47,9 +48,9 @@ export function WizardStepEditor({
   };
 
   const handleTranslate = async (targetLang: string) => {
-    const apiKey = localStorage.getItem('openai_api_key');
+    const apiKey = await getApiKey();
     if (!apiKey) {
-      alert('Configura la API Key OpenAI nelle impostazioni');
+      alert('API Key OpenAI non configurata nel database. Contatta l\'amministratore.');
       return;
     }
 
@@ -70,9 +71,9 @@ export function WizardStepEditor({
   };
 
   const handleSummary = async () => {
-    const apiKey = localStorage.getItem('openai_api_key');
+    const apiKey = await getApiKey();
     if (!apiKey) {
-      alert('Configura la API Key OpenAI nelle impostazioni');
+      alert('API Key OpenAI non configurata nel database. Contatta l\'amministratore.');
       return;
     }
 
