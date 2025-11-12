@@ -7,7 +7,7 @@ export class ChunkedTranscriptionService {
   async transcribeFile(
     file: File,
     language: string,
-    openaiApiKey: string,
+    _openaiApiKey: string,
     onProgress: (progress: UploadProgress) => void,
     forceChunking: boolean = false
   ): Promise<string> {
@@ -42,7 +42,6 @@ export class ChunkedTranscriptionService {
             body: JSON.stringify({
               chunkPath,
               language,
-              openaiApiKey,
             }),
           }
         );

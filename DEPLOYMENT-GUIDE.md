@@ -38,8 +38,24 @@ The script will automatically:
 - Start the backend with PM2
 - Set up automatic cleanup jobs
 
-### 5. Configure OpenAI API Key
-After the script completes, edit the backend .env file:
+### 5. Configure OpenAI API Key on Supabase
+
+L'applicazione ora usa Supabase Edge Functions per gestire le chiamate a OpenAI in modo sicuro. L'API key NON viene più inclusa nel bundle frontend.
+
+**Configura l'API key su Supabase:**
+
+1. Vai su https://supabase.com/dashboard
+2. Seleziona il tuo progetto
+3. Vai su **Settings** > **Edge Functions** > **Secrets**
+4. Aggiungi un nuovo segreto:
+   - Nome: `OPENAI_API_KEY`
+   - Valore: la tua chiave OpenAI (inizia con `sk-proj-...`)
+5. Salva
+
+Le Edge Functions ora useranno automaticamente questa chiave configurata sul server, senza esporla nel frontend.
+
+### 6. (Opzionale) Configure Local .env for Development
+Se vuoi testare in locale con la tua API key:
 ```bash
 nano /var/www/audioscribe/server/.env
 ```

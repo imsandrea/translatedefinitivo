@@ -10,7 +10,6 @@ const corsHeaders = {
 interface TranscriptionRequest {
   chunkPath: string;
   language?: string;
-  openaiApiKey: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -24,12 +23,23 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+
+    if (!openaiApiKey) {
+      return new Response(
+        JSON.stringify({ error: "OPENAI_API_KEY non configurata sul server. Contatta l'amministratore." }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { chunkPath, language = "it", openaiApiKey }: TranscriptionRequest = await req.json();
+    const { chunkPath, language = "it" }: TranscriptionRequest = await req.json();
 
-    if (!chunkPath || !openaiApiKey) {
+    if (!chunkPath) {
       return new Response(
         JSON.stringify({ error: "Missing required parameters" }),
         {
@@ -53,7 +63,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Extract filename from chunkPath to preserve extension
     const fileName = chunkPath.split('/').pop() || 'audio.mp3';
 
     const formData = new FormData();
