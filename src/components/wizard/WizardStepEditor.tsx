@@ -24,6 +24,8 @@ export function WizardStepEditor({
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'format' | 'translate' | 'summary'>('format');
+  const [processingMessage, setProcessingMessage] = useState('');
+  const [showContinueButton, setShowContinueButton] = useState(false);
 
   const handleFormat = async () => {
     const apiKey = await getApiKey();
@@ -33,6 +35,8 @@ export function WizardStepEditor({
     }
 
     setIsProcessing(true);
+    setProcessingMessage('Formattazione del testo in corso...');
+    setShowContinueButton(false);
     try {
       textFormatter.setApiKey(apiKey);
       const result = await textFormatter.formatByType(
@@ -40,8 +44,11 @@ export function WizardStepEditor({
         audioType as any
       );
       setText(result.formattedText);
+      setShowContinueButton(true);
+      setProcessingMessage('Formattazione completata!');
     } catch (error: any) {
       alert(`Errore: ${error.message}`);
+      setProcessingMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -55,6 +62,8 @@ export function WizardStepEditor({
     }
 
     setIsProcessing(true);
+    setProcessingMessage(`Traduzione in corso...`);
+    setShowContinueButton(false);
     try {
       translationService.setApiKey(apiKey);
       const translated = await translationService.translateText(
@@ -63,8 +72,10 @@ export function WizardStepEditor({
         targetLang
       );
       setText(translated);
+      setProcessingMessage('Traduzione completata!');
     } catch (error: any) {
       alert(`Errore: ${error.message}`);
+      setProcessingMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -78,14 +89,18 @@ export function WizardStepEditor({
     }
 
     setIsProcessing(true);
+    setProcessingMessage('Generazione sintesi in corso...');
+    setShowContinueButton(false);
     try {
       aiPostProcessing.setApiKey(apiKey);
       const summary = await aiPostProcessing.generateSummary(text, {
         style: 'detailed',
       });
       setText(summary);
+      setProcessingMessage('Sintesi completata!');
     } catch (error: any) {
       alert(`Errore: ${error.message}`);
+      setProcessingMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -167,13 +182,39 @@ export function WizardStepEditor({
           <p className="text-sm text-gray-600 mb-4">
             Migliora la leggibilità con paragrafi, titoli e punteggiatura ottimizzata
           </p>
-          <button
-            onClick={handleFormat}
-            disabled={isProcessing}
-            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-          >
-            {isProcessing ? 'Formattazione...' : 'Formatta Testo'}
-          </button>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleFormat}
+              disabled={isProcessing}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+            >
+              {isProcessing ? 'Formattazione...' : 'Formatta Testo'}
+            </button>
+            {showContinueButton && (
+              <button
+                onClick={() => {
+                  setActiveTab('translate');
+                  setShowContinueButton(false);
+                }}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <Languages className="w-4 h-4" />
+                <span>Vai alla Traduzione</span>
+              </button>
+            )}
+          </div>
+          {isProcessing && (
+            <div className="mt-4 flex items-center space-x-3 text-blue-600">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
+          {!isProcessing && processingMessage && (
+            <div className="mt-4 flex items-center space-x-2 text-green-600">
+              <Check className="w-5 h-5" />
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -182,8 +223,9 @@ export function WizardStepEditor({
           <h3 className="font-semibold text-gray-900 mb-3">
             Traduci in un'altra lingua
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
+              { code: 'it', name: 'Italiano', flag: '🇮🇹' },
               { code: 'en', name: 'Inglese', flag: '🇬🇧' },
               { code: 'es', name: 'Spagnolo', flag: '🇪🇸' },
               { code: 'fr', name: 'Francese', flag: '🇫🇷' },
@@ -201,6 +243,18 @@ export function WizardStepEditor({
               </button>
             ))}
           </div>
+          {isProcessing && (
+            <div className="mt-4 flex items-center space-x-3 text-blue-600">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
+          {!isProcessing && processingMessage && (
+            <div className="mt-4 flex items-center space-x-2 text-green-600">
+              <Check className="w-5 h-5" />
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -219,6 +273,18 @@ export function WizardStepEditor({
           >
             {isProcessing ? 'Generazione...' : 'Genera Sintesi'}
           </button>
+          {isProcessing && (
+            <div className="mt-4 flex items-center space-x-3 text-blue-600">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
+          {!isProcessing && processingMessage && (
+            <div className="mt-4 flex items-center space-x-2 text-green-600">
+              <Check className="w-5 h-5" />
+              <span className="text-sm font-medium">{processingMessage}</span>
+            </div>
+          )}
         </div>
       )}
 
