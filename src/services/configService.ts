@@ -45,3 +45,21 @@ export async function checkApiKeyStatus(): Promise<ConfigStatus> {
     };
   }
 }
+
+export async function getApiKey(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_decrypted_config', {
+      config_key: 'openai_api_key'
+    });
+
+    if (error) {
+      console.error('Error fetching API key:', error);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('Exception fetching API key:', err);
+    return null;
+  }
+}

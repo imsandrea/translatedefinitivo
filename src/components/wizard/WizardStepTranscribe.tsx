@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { chunkedTranscriptionService } from '../../services/chunkedTranscriptionService';
+import { getApiKey } from '../../services/configService';
 import type { UploadProgress } from '../../services/supabaseStorageService';
 
 interface AudioSession {
@@ -33,9 +34,9 @@ export function WizardStepTranscribe({
   }, []);
 
   const startTranscription = async () => {
-    const openaiApiKey = localStorage.getItem('openai_api_key');
+    const openaiApiKey = await getApiKey();
     if (!openaiApiKey) {
-      setError('API Key OpenAI non configurata. Vai in Impostazioni per configurarla.');
+      setError('API Key OpenAI non configurata nel database. Contatta l\'amministratore.');
       return;
     }
 
