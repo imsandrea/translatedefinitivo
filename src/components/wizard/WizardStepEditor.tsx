@@ -225,16 +225,16 @@ export function WizardStepEditor({
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { code: 'it', name: 'Italiano', flag: '🇮🇹', actualTarget: 'en' },
-              { code: 'en', name: 'Inglese', flag: '🇬🇧', actualTarget: 'en' },
-              { code: 'es', name: 'Spagnolo', flag: '🇪🇸', actualTarget: 'es' },
-              { code: 'fr', name: 'Francese', flag: '🇫🇷', actualTarget: 'fr' },
-              { code: 'de', name: 'Tedesco', flag: '🇩🇪', actualTarget: 'de' },
-              { code: 'pt', name: 'Portoghese', flag: '🇵🇹', actualTarget: 'pt' },
+              { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+              { code: 'en', name: 'Inglese', flag: '🇬🇧' },
+              { code: 'es', name: 'Spagnolo', flag: '🇪🇸' },
+              { code: 'fr', name: 'Francese', flag: '🇫🇷' },
+              { code: 'de', name: 'Tedesco', flag: '🇩🇪' },
+              { code: 'pt', name: 'Portoghese', flag: '🇵🇹' },
             ].map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => handleTranslate(lang.actualTarget)}
+                onClick={() => handleTranslate(lang.code)}
                 disabled={isProcessing}
                 className="p-3 bg-white border-2 border-gray-200 hover:border-blue-400 disabled:opacity-50 rounded-lg transition-colors"
               >
