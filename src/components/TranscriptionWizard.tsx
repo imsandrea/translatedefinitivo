@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Upload, Settings, Mic, FileText, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, Settings, Mic, FileText, ChevronRight, ChevronLeft, Key, AlertCircle } from 'lucide-react';
 import { WizardStepUpload } from './wizard/WizardStepUpload';
 import { WizardStepConfig } from './wizard/WizardStepConfig';
 import { WizardStepTranscribe } from './wizard/WizardStepTranscribe';
 import { WizardStepEditor } from './wizard/WizardStepEditor';
+import { checkApiKeyStatus } from '../services/configService';
 
 export type WizardStep = 'upload' | 'config' | 'transcribe' | 'editor';
 
@@ -17,6 +18,18 @@ interface AudioSession {
 export function TranscriptionWizard() {
   const [currentStep, setCurrentStep] = useState<WizardStep>('upload');
   const [audioSession, setAudioSession] = useState<AudioSession | null>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<{
+    hasApiKey: boolean;
+    keyPreview?: string;
+    error?: string;
+    loading: boolean;
+  }>({ hasApiKey: false, loading: true });
+
+  useEffect(() => {
+    checkApiKeyStatus().then(status => {
+      setApiKeyStatus({ ...status, loading: false });
+    });
+  }, []);
 
   const steps = [
     { id: 'upload', label: 'Carica Audio', icon: Upload },
@@ -45,12 +58,41 @@ export function TranscriptionWizard() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            AudioScribe Pro
-          </h1>
-          <p className="text-gray-600">
-            Trascrizione audio professionale guidata passo dopo passo
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                AudioScribe Pro
+              </h1>
+              <p className="text-gray-600">
+                Trascrizione audio professionale guidata passo dopo passo
+              </p>
+            </div>
+
+            <div className="ml-6">
+              {apiKeyStatus.loading ? (
+                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-600">Checking API key...</span>
+                </div>
+              ) : apiKeyStatus.hasApiKey ? (
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <Key className="w-4 h-4 text-green-600" />
+                  <div className="text-sm">
+                    <div className="font-medium text-green-900">API Key Configured</div>
+                    <div className="text-green-700 font-mono text-xs">{apiKeyStatus.keyPreview}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <div className="text-sm">
+                    <div className="font-medium text-red-900">API Key Missing</div>
+                    <div className="text-red-700 text-xs">Configure in database</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="mb-8">
